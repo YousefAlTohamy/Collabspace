@@ -30,7 +30,10 @@ class AppServiceProvider extends ServiceProvider
         Password::defaults(fn () => Password::min(8)->letters()->numbers());
 
         RateLimiter::for('auth-login', fn (Request $request) => [
+            // Per email+ip, plus a wider per-ip ceiling so one IP cannot rotate
+            // emails to make 5 attempts against many different accounts.
             Limit::perMinute(5)->by(mb_strtolower((string) $request->input('email')).'|'.$request->ip()),
+            Limit::perMinute(30)->by($request->ip()),
         ]);
 
         RateLimiter::for('auth-register', fn (Request $request) => [

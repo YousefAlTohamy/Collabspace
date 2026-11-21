@@ -136,6 +136,22 @@ class ProfileTest extends TestCase
         ])->assertOk();
     }
 
+    public function test_password_change_rejects_password_equal_to_current(): void
+    {
+        [$user, $token] = $this->actingAsUser(User::factory()->create(['password' => 'OldSecret1']));
+
+        $this->withToken($token)->putJson('/api/v1/me/password', [
+            'current_password' => 'OldSecret1',
+            'password' => 'OldSecret1',
+            'password_confirmation' => 'OldSecret1',
+        ])->assertUnprocessable()->assertJsonValidationErrors('password');
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $user->email,
+            'password' => 'OldSecret1',
+        ])->assertOk();
+    }
+
     public function test_password_change_keeps_only_the_current_token(): void
     {
         $user = User::factory()->create(['password' => 'OldSecret1']);

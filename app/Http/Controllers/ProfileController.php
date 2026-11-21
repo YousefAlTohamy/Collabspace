@@ -30,15 +30,18 @@ class ProfileController extends Controller
     public function avatar(UpdateAvatarRequest $request): UserResource
     {
         $user = $request->user();
+        $previousPath = $user->avatar_path;
 
-        if ($user->avatar_path !== null) {
-            Storage::disk('public')->delete($user->avatar_path);
-        }
-
+        // Store the new file and point the user at it first; only then remove the
+        // old one, so a failed store never leaves the user without an avatar.
         // store() generates a random hash name; SVG is blocked by validation.
         $user->update([
             'avatar_path' => $request->file('avatar')->store('avatars', 'public'),
         ]);
+
+        if ($previousPath !== null) {
+            Storage::disk('public')->delete($previousPath);
+        }
 
         return new UserResource($user);
     }

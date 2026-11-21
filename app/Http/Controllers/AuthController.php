@@ -22,21 +22,26 @@ class AuthController extends Controller
     {
         $user = User::create($request->validated());
 
-        return $this->tokenResponse($user, now()->addDays(30), 201);
+        return $this->tokenResponse($user, $this->tokenExpiry($request->boolean('remember')), 201);
     }
 
     public function login(LoginRequest $request): JsonResponse
     {
         $user = User::where('email', $request->validated('email'))->first();
 
-        // Same generic 401 for unknown email and wrong password (no user enumeration).
-        if ($user === null || ! Hash::check((string) $request->validated('password'), (string) $user->password)) {
-            return response()->json(['message' => __('auth.failed')], 401);
+        if ($user === null) {
+            // Burn one bcrypt round (result ignored) so an unknown email is not
+            // measurably faster than a wrong password; both paths cost one hash.
+            Hash::make((string) $request->validated('password'));
+
+            return $this->invalidCredentials();
         }
 
-        $expiresAt = $request->boolean('remember') ? now()->addDays(30) : now()->addDay();
+        if (! Hash::check((string) $request->validated('password'), (string) $user->password)) {
+            return $this->invalidCredentials();
+        }
 
-        return $this->tokenResponse($user, $expiresAt);
+        return $this->tokenResponse($user, $this->tokenExpiry($request->boolean('remember')));
     }
 
     public function logout(Request $request): JsonResponse
@@ -75,6 +80,18 @@ class AuthController extends Controller
             'message' => __('passwords.token'),
             'errors' => ['token' => [__('passwords.token')]],
         ], 422);
+    }
+
+    private function tokenExpiry(bool $remember): DateTimeInterface
+    {
+        // Same lifetime rule for register and login: 1 day, 30 days with remember.
+        return $remember ? now()->addDays(30) : now()->addDay();
+    }
+
+    private function invalidCredentials(): JsonResponse
+    {
+        // One generic message for unknown email and wrong password (no user enumeration).
+        return response()->json(['message' => __('auth.failed')], 401);
     }
 
     private function tokenResponse(User $user, DateTimeInterface $expiresAt, int $status = 200): JsonResponse

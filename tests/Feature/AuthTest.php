@@ -128,6 +128,36 @@ class AuthTest extends TestCase
         $this->assertSame($wrongPassword->getContent(), $unknownEmail->getContent());
     }
 
+    public function test_register_remember_controls_token_lifetime(): void
+    {
+        $shortLived = $this->postJson('/api/v1/auth/register', [
+            'name' => 'Jane Doe',
+            'email' => 'short@example.com',
+            'password' => 'Secret123',
+            'password_confirmation' => 'Secret123',
+        ]);
+
+        $longLived = $this->postJson('/api/v1/auth/register', [
+            'name' => 'John Doe',
+            'email' => 'long@example.com',
+            'password' => 'Secret123',
+            'password_confirmation' => 'Secret123',
+            'remember' => true,
+        ]);
+
+        $this->assertEqualsWithDelta(
+            now()->addDay()->getTimestamp(),
+            Carbon::parse($shortLived->json('expires_at'))->getTimestamp(),
+            60,
+        );
+
+        $this->assertEqualsWithDelta(
+            now()->addDays(30)->getTimestamp(),
+            Carbon::parse($longLived->json('expires_at'))->getTimestamp(),
+            60,
+        );
+    }
+
     public function test_login_remember_controls_token_lifetime(): void
     {
         $user = User::factory()->create(['password' => 'Secret123']);
@@ -255,6 +285,23 @@ class AuthTest extends TestCase
 
         $this->postJson('/api/v1/auth/login', [
             'email' => $user->email,
+            'password' => 'WrongPass1',
+        ])->assertStatus(429)->assertJsonStructure(['message']);
+    }
+
+    public function test_login_ip_wide_limit_blocks_email_rotation(): void
+    {
+        // 30 attempts, each with a different email: no single email|ip bucket
+        // exceeds 5, but the ip-only bucket counts every attempt.
+        for ($attempt = 1; $attempt <= 30; $attempt++) {
+            $this->postJson('/api/v1/auth/login', [
+                'email' => "ghost{$attempt}@example.com",
+                'password' => 'WrongPass1',
+            ])->assertUnauthorized();
+        }
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'another-ghost@example.com',
             'password' => 'WrongPass1',
         ])->assertStatus(429)->assertJsonStructure(['message']);
     }
