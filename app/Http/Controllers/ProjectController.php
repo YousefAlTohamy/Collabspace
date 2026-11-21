@@ -8,6 +8,7 @@ use App\Enums\ProjectRole;
 use App\Http\Requests\ListProjectsRequest;
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
+use App\Http\Resources\ProjectDetailResource;
 use App\Http\Resources\ProjectResource;
 use App\Models\Project;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -83,7 +84,7 @@ class ProjectController extends Controller
     /**
      * @throws AuthorizationException
      */
-    public function show(Request $request, Project $project): ProjectResource
+    public function show(Request $request, Project $project): ProjectDetailResource
     {
         $this->authorize('view', $project); // R2
 
@@ -93,7 +94,7 @@ class ProjectController extends Controller
     /**
      * @throws AuthorizationException
      */
-    public function update(UpdateProjectRequest $request, Project $project): ProjectResource
+    public function update(UpdateProjectRequest $request, Project $project): ProjectDetailResource
     {
         $this->authorize('update', $project);
 
@@ -114,13 +115,10 @@ class ProjectController extends Controller
         return response()->json(['message' => __('Project deleted.')]);
     }
 
-    private function detailResponse(Project $project): ProjectResource
+    private function detailResponse(Project $project): ProjectDetailResource
     {
         $project->loadCount('members')->load(['members.user', 'members.team']);
 
-        $resource = new ProjectResource($project);
-        $resource->allMembers = true;
-
-        return $resource;
+        return new ProjectDetailResource($project);
     }
 }

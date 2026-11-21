@@ -9,16 +9,13 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
+ * List item: first 4 members only. The detail endpoint uses
+ * ProjectDetailResource.
+ *
  * @mixin Project
  */
 class ProjectResource extends JsonResource
 {
-    /**
-     * List responses show the first 4 members only; the detail endpoint shows
-     * all of them by setting this flag.
-     */
-    public bool $allMembers = false;
-
     /**
      * @return array<string, mixed>
      */
@@ -34,13 +31,7 @@ class ProjectResource extends JsonResource
             'start_date' => $this->start_date?->toDateString(),
             'end_date' => $this->end_date?->toDateString(),
             'members_count' => $this->whenCounted('members'),
-            'members' => $this->whenLoaded('members', function () {
-                $members = $this->allMembers
-                    ? $this->members
-                    : $this->members->take(4);
-
-                return ProjectMemberResource::collection($members);
-            }),
+            'members' => $this->whenLoaded('members', fn () => ProjectMemberResource::collection($this->members->take(4))),
         ];
     }
 }
