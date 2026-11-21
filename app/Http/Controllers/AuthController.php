@@ -20,7 +20,8 @@ class AuthController extends Controller
 {
     public function register(RegisterRequest $request): JsonResponse
     {
-        $user = User::create($request->validated());
+        // 'remember' controls the token lifetime, it is not a user attribute.
+        $user = User::create($request->safe()->except('remember'));
 
         return $this->tokenResponse($user, $this->tokenExpiry($request->boolean('remember')), 201);
     }
