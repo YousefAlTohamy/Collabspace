@@ -261,6 +261,28 @@ class ProjectsTest extends TestCase
         $this->assertDatabaseCount('projects', 0);
     }
 
+    public function test_create_rejects_creator_id_sent_as_string(): void
+    {
+        $me = User::factory()->create();
+
+        $response = $this->actingAs($me, 'sanctum')->postJson('/api/v1/projects', [
+            'name' => 'New Platform',
+            'priority' => 'medium',
+            'start_date' => '2026-11-01',
+            'end_date' => '2027-01-31',
+            'members' => [
+                // JSON ids can arrive as strings; the creator check must still fire.
+                ['user_id' => (string) $me->id],
+            ],
+        ]);
+
+        $response->assertUnprocessable()->assertJsonValidationErrors('members.0.user_id');
+
+        // Nothing half-created.
+        $this->assertDatabaseCount('projects', 0);
+        $this->assertDatabaseCount('project_members', 0);
+    }
+
     public function test_create_rolls_back_when_adding_members_fails(): void
     {
         $me = User::factory()->create();

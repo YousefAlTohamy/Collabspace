@@ -33,8 +33,9 @@ class StoreProjectRequest extends FormRequest
                 'distinct',
                 function (string $attribute, mixed $value, Closure $fail): void {
                     // The creator is always added as leader (R1), so they cannot
-                    // also appear in the members payload.
-                    if ($value === $this->user()->id) {
+                    // also appear in the members payload. Cast: ids may arrive
+                    // as strings from the JSON layer.
+                    if ((int) $value === $this->user()->id) {
                         $fail('The creator is added as leader automatically and cannot be listed as a member.');
                     }
                 },

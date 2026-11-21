@@ -49,7 +49,7 @@ class ProjectMemberController extends Controller
 
         $member = $project->members()->create([
             'user_id' => $request->validated('user_id'),
-            'role' => $request->validated('role', ProjectRole::Member),
+            'role' => $request->validated('role') ?? ProjectRole::Member,
             'team_id' => $request->validated('team_id'),
             'job_title' => $request->validated('job_title'),
         ]);

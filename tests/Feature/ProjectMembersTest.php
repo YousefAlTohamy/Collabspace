@@ -106,6 +106,25 @@ class ProjectMembersTest extends TestCase
             ->assertJsonValidationErrors('team_id');
     }
 
+    public function test_store_accepts_explicit_null_role_and_defaults_to_member(): void
+    {
+        $newUser = User::factory()->create();
+
+        $response = $this->actingAs($this->leader, 'sanctum')
+            ->postJson("/api/v1/projects/{$this->project->id}/members", [
+                'user_id' => $newUser->id,
+                'role' => null,
+            ]);
+
+        $response->assertCreated()->assertJsonPath('data.role', 'member');
+
+        $this->assertDatabaseHas('project_members', [
+            'project_id' => $this->project->id,
+            'user_id' => $newUser->id,
+            'role' => 'member',
+        ]);
+    }
+
     public function test_store_is_leader_only(): void
     {
         $payload = ['user_id' => User::factory()->create()->id];
@@ -147,6 +166,18 @@ class ProjectMembersTest extends TestCase
         $this->actingAs($this->leader, 'sanctum')
             ->putJson("/api/v1/projects/{$this->project->id}/members/{$stranger->id}", ['role' => 'member'])
             ->assertNotFound();
+    }
+
+    public function test_update_rejects_explicit_null_role(): void
+    {
+        $member = $this->addMember(User::factory()->create());
+
+        $this->actingAs($this->leader, 'sanctum')
+            ->putJson("/api/v1/projects/{$this->project->id}/members/{$member->user_id}", ['role' => null])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('role');
+
+        $this->assertDatabaseHas('project_members', ['id' => $member->id, 'role' => 'member']);
     }
 
     public function test_update_is_leader_only(): void
