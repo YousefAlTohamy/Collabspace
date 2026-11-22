@@ -12,5 +12,9 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(TeamSeeder::class);
+
+        if (app()->environment('local')) {
+            $this->call(DemoSeeder::class);
+        }
     }
 }
