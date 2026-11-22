@@ -31,6 +31,9 @@ class SaveMeeting
 
             $meeting->fill($attributes);
             $meeting->starts_at = $startsAt;
+            if ($meeting->isDirty('starts_at')) {
+                $meeting->reminder_sent_at = null;
+            }
             $meeting->save();
 
             if ($creating || $participantIds !== null) {

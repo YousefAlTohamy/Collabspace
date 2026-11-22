@@ -28,6 +28,7 @@ class ChangeTaskStatus
                     'status' => $to,
                     'progress' => 100,
                     'completed_at' => $task->completed_at ?? now(),
+                    'overdue_notified_at' => null,
                 ])->save();
 
                 return $task;

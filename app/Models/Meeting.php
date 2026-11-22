@@ -22,6 +22,7 @@ class Meeting extends Model
     {
         return [
             'starts_at' => 'immutable_datetime',
+            'reminder_sent_at' => 'immutable_datetime',
             'duration_minutes' => 'integer',
             'project_id' => 'integer',
         ];

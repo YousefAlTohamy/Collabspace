@@ -62,13 +62,21 @@ class DemoSeederTest extends TestCase
             $this->assertSame(TaskStatus::Completed, $task->status);
         }
 
-        $startsAt = Meeting::query()->where('project_id', $alpha->id)->pluck('starts_at');
-        $this->assertCount(4, $startsAt);
+        $meetings = Meeting::query()->where('project_id', $alpha->id)->with('participants')->get();
+        $this->assertCount(5, $meetings);
+        $startsAt = $meetings->where('title', '!=', 'Demo reminder')->pluck('starts_at');
         $this->assertEqualsCanonicalizing(
             [now()->addDay()->toDateString(), now()->addDays(3)->toDateString(), now()->addWeek()->toDateString()],
             $startsAt->filter(fn ($start) => $start->isFuture())->map->toDateString()->values()->all(),
         );
         $this->assertCount(1, $startsAt->filter(fn ($start) => $start->isPast()));
+
+        $reminder = $meetings->sole('title', 'Demo reminder');
+        $this->assertSame(now()->addMinutes(20)->toDateTimeString(), $reminder->starts_at->toDateTimeString());
+        $this->assertSame($alpha->id, $reminder->project_id);
+        $this->assertNotEmpty($reminder->participants);
+        $this->assertEmpty(array_diff($reminder->participants->modelKeys(), $alpha->members->pluck('user_id')->all()));
+        $this->assertNull($reminder->reminder_sent_at);
     }
 
     public function test_database_seeder_only_adds_demo_accounts_in_local(): void

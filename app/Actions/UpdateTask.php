@@ -21,7 +21,11 @@ class UpdateTask
         return DB::transaction(function () use ($actor, $task, $attributes): Task {
             $this->lockMembers->execute($task->project_id, $attributes);
             $task = Task::query()->lockForUpdate()->findOrFail($task->id);
-            $task->update(Arr::except($attributes, ['assignee_ids']));
+            $task->fill(Arr::except($attributes, ['assignee_ids']));
+            if ($task->isDirty('due_date') && $task->due_date?->gte(today('UTC'))) {
+                $task->overdue_notified_at = null;
+            }
+            $task->save();
 
             if (array_key_exists('assignee_ids', $attributes)) {
                 $this->syncAssignees->execute($task, $actor, $attributes['assignee_ids']);
