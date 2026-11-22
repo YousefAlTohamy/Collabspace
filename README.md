@@ -1,5 +1,7 @@
 # Collabspace API
 
+![CI](https://github.com/YousefAlTohamy/Collabspace/actions/workflows/ci.yml/badge.svg)
+
 Backend API for **Collabspace**, a team collaboration platform for remote teams. It brings projects, kanban tasks, file sharing, chat,
 meetings (with transcript and AI summary), reports and an AI assistant into one workspace, so teams stop switching between separate tools.
 
@@ -7,6 +9,8 @@ Built with **Laravel 13**, **PHP 8.4**, **MySQL 8**, **Laravel Sanctum** and **D
 The full business rules and the API contract are in [`docs/SPEC.md`](docs/SPEC.md).
 
 ## What the product does
+
+See `docs/FIGMA_COVERAGE.md` for the mapping between the Figma screens and the API, and `docs/ERD.md` for the data model.
 
 | Module | What it covers |
 |---|---|
