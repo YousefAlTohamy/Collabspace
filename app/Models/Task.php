@@ -33,6 +33,7 @@ class Task extends Model
             'start_date' => 'date',
             'due_date' => 'date',
             'completed_at' => 'datetime',
+            'overdue_notified_at' => 'immutable_datetime',
         ];
     }
 

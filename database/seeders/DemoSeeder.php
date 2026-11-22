@@ -230,16 +230,17 @@ class DemoSeeder extends Seeder
     private function createMeetings(Project $project, array $users, CarbonImmutable $now): Meeting
     {
         $definitions = [
-            ['Design review', 1, 'mohanad', ['mohamed', 'sara', 'ali']],
-            ['Backend sync', 3, 'mohamed', ['mohanad', 'khalid']],
-            ['Pilot planning', 7, 'mohamed', ['sara', 'mahmoud']],
-            ['Sprint retrospective', -4, 'mohamed', ['mohanad', 'sara', 'ali']],
+            ['Design review', $now->addDay()->setTime(10, 0), 'mohanad', ['mohamed', 'sara', 'ali']],
+            ['Backend sync', $now->addDays(3)->setTime(10, 0), 'mohamed', ['mohanad', 'khalid']],
+            ['Pilot planning', $now->addWeek()->setTime(10, 0), 'mohamed', ['sara', 'mahmoud']],
+            ['Sprint retrospective', $now->subDays(4)->setTime(10, 0), 'mohamed', ['mohanad', 'sara', 'ali']],
+            ['Demo reminder', $now->addMinutes(20), 'mohamed', ['sara', 'ali']],
         ];
         $meetings = [];
-        foreach ($definitions as [$title, $days, $organizer, $participants]) {
+        foreach ($definitions as [$title, $startsAt, $organizer, $participants]) {
             $meeting = Meeting::factory()->for($project)->for($users[$organizer], 'organizer')->create([
                 'title' => $title,
-                'starts_at' => $now->addDays($days)->setTime(10, 0),
+                'starts_at' => $startsAt,
                 'duration_minutes' => 30,
                 'meeting_url' => 'https://meet.example.com/'.Str::slug($title),
             ]);

@@ -124,6 +124,10 @@ If port 8000 is busy, update `APP_PORT` and `APP_URL` in `.env`.
 
 In the `local` environment, `--seed` also loads **demo data** (see below). In any other environment only the four teams are seeded.
 
+### Scheduled notifications
+
+Run the scheduler worker with `docker compose exec laravel.test php artisan schedule:work` to send meeting reminders and overdue task notifications every five minutes. To send the due notifications once, run `docker compose exec laravel.test php artisan notifications:send-reminders`.
+
 ### Environment variables
 
 | Variable | Purpose |
