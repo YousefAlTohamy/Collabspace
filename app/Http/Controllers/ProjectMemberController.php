@@ -4,21 +4,20 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Enums\ProjectRole;
+use App\Actions\AddProjectMember;
+use App\Actions\RemoveProjectMember;
+use App\Actions\UpdateProjectMember;
 use App\Http\Requests\StoreMemberRequest;
 use App\Http\Requests\UpdateMemberRequest;
 use App\Http\Resources\ProjectMemberResource;
 use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\User;
-use App\Notifications\AddedToProject;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class ProjectMemberController extends Controller
 {
@@ -45,24 +44,11 @@ class ProjectMemberController extends Controller
     /**
      * @throws AuthorizationException
      */
-    public function store(StoreMemberRequest $request, Project $project): JsonResponse
+    public function store(StoreMemberRequest $request, Project $project, AddProjectMember $action): JsonResponse
     {
         $this->authorize('manageMembers', $project);
 
-        $member = DB::transaction(function () use ($request, $project): ProjectMember {
-            $member = $project->members()->create([
-                'user_id' => $request->validated('user_id'),
-                'role' => $request->validated('role') ?? ProjectRole::Member,
-                'team_id' => $request->validated('team_id'),
-                'job_title' => $request->validated('job_title'),
-            ])->load(['user', 'team']);
-            $actor = $request->user();
-            if ($member->user->id !== $actor->id) {
-                $member->user->notify(new AddedToProject($project->id, $actor));
-            }
-
-            return $member;
-        });
+        $member = $action->execute($request->user(), $project, $request->validated());
 
         return (new ProjectMemberResource($member))
             ->response()
@@ -72,24 +58,13 @@ class ProjectMemberController extends Controller
     /**
      * @throws AuthorizationException
      */
-    public function update(UpdateMemberRequest $request, Project $project, User $user): ProjectMemberResource
+    public function update(UpdateMemberRequest $request, Project $project, User $user, UpdateProjectMember $action): ProjectMemberResource
     {
         $this->authorize('manageMembers', $project);
 
         $member = $this->memberOf($project, $user);
 
-        $newRole = (string) $request->validated('role', '');
-        $demotesLastLeader = $newRole === ProjectRole::Member->value
-            && $member->role === ProjectRole::Leader
-            && $project->leaderCount() === 1;
-        if ($demotesLastLeader) {
-            // R1: a project must always keep at least one leader.
-            throw ValidationException::withMessages([
-                'role' => __('A project must always keep at least one leader.'),
-            ]);
-        }
-
-        $member->update($request->validated());
+        $action->execute($project, $member, $request->validated());
 
         return new ProjectMemberResource($member->load(['user', 'team']));
     }
@@ -97,32 +72,11 @@ class ProjectMemberController extends Controller
     /**
      * @throws AuthorizationException
      */
-    public function destroy(Request $request, Project $project, User $user): JsonResponse
+    public function destroy(Project $project, User $user, RemoveProjectMember $action): JsonResponse
     {
         $this->authorize('manageMembers', $project);
 
-        $member = $this->memberOf($project, $user);
-
-        if ($member->role === ProjectRole::Leader && $project->leaderCount() === 1) {
-            // R1: a project must always keep at least one leader.
-            throw ValidationException::withMessages([
-                'role' => __('A project must always keep at least one leader.'),
-            ]);
-        }
-
-        DB::transaction(function () use ($project, $user, $member): void {
-            $member->delete();
-
-            // R3: leaving the project also drops their task assignments here.
-            DB::table('task_assignees')
-                ->whereIn('task_id', $project->tasks()->select('id'))
-                ->where('user_id', $user->id)
-                ->delete();
-
-            $project->tasks()
-                ->where('reviewer_id', $user->id)
-                ->update(['reviewer_id' => null]);
-        });
+        $action->execute($project, $this->memberOf($project, $user));
 
         return response()->json(['message' => __('Member removed.')]);
     }
