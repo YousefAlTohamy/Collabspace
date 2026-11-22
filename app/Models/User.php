@@ -49,6 +49,13 @@ class User extends Authenticatable
             ->withPivot('role', 'team_id', 'job_title');
     }
 
+    public function sharesProjectWith(User $other): bool
+    {
+        return $this->projects()
+            ->whereIn('projects.id', $other->projects()->getQuery()->select('projects.id'))
+            ->exists();
+    }
+
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class, 'created_by');

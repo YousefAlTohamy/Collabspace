@@ -1,6 +1,11 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\MeetingTranscriptController;
+use App\Http\Controllers\MessageController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectFileController;
@@ -9,6 +14,7 @@ use App\Http\Controllers\TaskCommentController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\UserController;
+use App\Http\Middleware\ThrottleChatAttachments;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
@@ -71,5 +77,25 @@ Route::prefix('v1')->group(function (): void {
             ->name('files.download')
             ->whereNumber('file');
         Route::delete('/files/{file}', [ProjectFileController::class, 'destroy'])->whereNumber('file');
+
+        Route::get('/conversations', [ConversationController::class, 'index']);
+        Route::post('/conversations/direct', [ConversationController::class, 'storeDirect']);
+        Route::get('/conversations/{conversation}/messages', [MessageController::class, 'index'])->whereNumber('conversation');
+        Route::post('/conversations/{conversation}/messages', [MessageController::class, 'store'])
+            ->middleware(ThrottleChatAttachments::class)->whereNumber('conversation');
+        Route::get('/messages/{message}/attachment', [MessageController::class, 'attachment'])
+            ->name('messages.attachment')->whereNumber('message');
+
+        Route::get('/meetings', [MeetingController::class, 'index']);
+        Route::post('/meetings', [MeetingController::class, 'store']);
+        Route::get('/meetings/{meeting}', [MeetingController::class, 'show'])->whereNumber('meeting');
+        Route::put('/meetings/{meeting}', [MeetingController::class, 'update'])->whereNumber('meeting');
+        Route::delete('/meetings/{meeting}', [MeetingController::class, 'destroy'])->whereNumber('meeting');
+        Route::get('/meetings/{meeting}/transcript', [MeetingTranscriptController::class, 'index'])->whereNumber('meeting');
+        Route::post('/meetings/{meeting}/transcript', [MeetingTranscriptController::class, 'store'])->whereNumber('meeting');
+
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::post('/notifications/read-all', [NotificationController::class, 'readAll']);
+        Route::post('/notifications/{id}/read', [NotificationController::class, 'read'])->whereUuid('id');
     });
 });
