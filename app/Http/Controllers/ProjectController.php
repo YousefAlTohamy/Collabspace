@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\CreateProject;
+use App\Actions\DeleteProject;
 use App\Actions\ProjectTeamsOverview;
-use App\Enums\ProjectRole;
 use App\Enums\ProjectStatus;
 use App\Enums\TaskStatus;
 use App\Http\Requests\ListProjectsRequest;
@@ -14,10 +15,7 @@ use App\Http\Requests\UpdateProjectRequest;
 use App\Http\Resources\ProjectDetailResource;
 use App\Http\Resources\ProjectResource;
 use App\Http\Resources\ProjectTeamsResource;
-use App\Models\Conversation;
 use App\Models\Project;
-use App\Models\User;
-use App\Notifications\AddedToProject;
 use App\Support\Like;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Database\Eloquent\Builder;
@@ -26,10 +24,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Storage;
-use League\Flysystem\UnableToDeleteDirectory;
 
 class ProjectController extends Controller
 {
@@ -60,40 +54,9 @@ class ProjectController extends Controller
     /**
      * @throws AuthorizationException
      */
-    public function store(StoreProjectRequest $request): JsonResponse
+    public function store(StoreProjectRequest $request, CreateProject $action): JsonResponse
     {
-        $project = DB::transaction(function () use ($request): Project {
-            // Attribute assignment (not fill) keeps created_by out of mass
-            // assignment while still setting it explicitly from the session.
-            $project = new Project($request->safe()->except('members'));
-            $project->created_by = $request->user()->id;
-            $project->save();
-            Conversation::createProjectChannel($project);
-            // Pick up DB defaults (status = active) that are absent from the payload.
-            $project->refresh();
-
-            // R1: the creator becomes the leader.
-            $project->members()->create([
-                'user_id' => $request->user()->id,
-                'role' => ProjectRole::Leader,
-            ]);
-
-            $members = $request->validated('members') ?? [];
-            foreach ($members as $member) {
-                $project->members()->create([
-                    'user_id' => $member['user_id'],
-                    'role' => $member['role'] ?? ProjectRole::Member,
-                    'team_id' => $member['team_id'] ?? null,
-                    'job_title' => $member['job_title'] ?? null,
-                ]);
-            }
-
-            $actor = $request->user();
-            $added = User::query()->whereKey(array_column($members, 'user_id'))->whereKeyNot($actor->id)->get();
-            Notification::send($added, new AddedToProject($project->id, $actor));
-
-            return $project;
-        });
+        $project = $action->execute($request->user(), $request->safe()->except('members'), $request->validated('members') ?? []);
 
         return $this->detailResponse($project)->response()->setStatusCode(201);
     }
@@ -130,36 +93,11 @@ class ProjectController extends Controller
     /**
      * @throws AuthorizationException
      */
-    public function destroy(Request $request, Project $project): JsonResponse
+    public function destroy(Project $project, DeleteProject $action): JsonResponse
     {
         $this->authorize('delete', $project);
 
-        $channelId = DB::transaction(function () use ($project): ?int {
-            $channelId = Conversation::query()->where('project_id', $project->id)->value('id');
-
-            abort_unless($project->delete(), 500);
-
-            return $channelId;
-        });
-
-        // R7: once the rows are gone, the stored files have no owner anymore.
-        $disk = Storage::disk('local');
-        $directories = ['projects/'.$project->id];
-        if ($channelId !== null) {
-            $directories[] = 'chat/'.$channelId;
-        }
-
-        foreach ($directories as $directory) {
-            try {
-                $removed = $disk->deleteDirectory($directory);
-            } catch (UnableToDeleteDirectory) {
-                $removed = false;
-            }
-
-            if (! $removed) {
-                Log::warning('Project storage cleanup failed.', ['project_id' => $project->id]);
-            }
-        }
+        $action->execute($project);
 
         return response()->json(['message' => __('Project deleted.')]);
     }
