@@ -7,10 +7,8 @@ namespace App\Http\Requests;
 use App\Models\Project;
 use App\Models\User;
 use Carbon\CarbonImmutable;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -59,9 +57,7 @@ class StoreMeetingRequest extends FormRequest
             $actor = $this->user();
             $projectId = $this->input('project_id', $meeting?->project_id);
             if ($projectId !== null) {
-                $project = Project::query()->find($projectId);
-                throw_if($project === null, AuthorizationException::class);
-                Gate::authorize('view', $project);
+                Project::findVisibleOrFail($actor, $projectId);
             }
 
             $participants = $this->input('participant_ids')

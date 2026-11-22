@@ -46,11 +46,6 @@ class Task extends Model
         return $this->belongsTo(User::class, 'reviewer_id');
     }
 
-    public function creator(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'created_by');
-    }
-
     public function assignees(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'task_assignees')->withTimestamps();
@@ -59,11 +54,6 @@ class Task extends Model
     public function comments(): HasMany
     {
         return $this->hasMany(TaskComment::class);
-    }
-
-    public function files(): HasMany
-    {
-        return $this->hasMany(ProjectFile::class);
     }
 
     public function isAssignee(User $user): bool

@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\SearchUsersRequest;
 use App\Http\Resources\UserSummaryResource;
 use App\Models\User;
+use App\Support\Like;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -16,14 +17,11 @@ class UserController extends Controller
     {
         $search = mb_strtolower(trim((string) $request->validated('search')));
 
-        // Escape LIKE wildcards so % and _ are matched literally.
-        $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
-
         $users = User::query()
             ->whereKeyNot($request->user()->id)
-            ->where(function (Builder $query) use ($escaped, $search): void {
+            ->where(function (Builder $query) use ($search): void {
                 $query
-                    ->where('name', 'like', '%'.$escaped.'%')
+                    ->where('name', 'like', Like::contains($search))
                     ->orWhere('email', $search);
             })
             ->orderBy('name')

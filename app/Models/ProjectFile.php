@@ -23,11 +23,6 @@ class ProjectFile extends Model
         return $this->belongsTo(Project::class);
     }
 
-    public function task(): BelongsTo
-    {
-        return $this->belongsTo(Task::class);
-    }
-
     public function uploader(): BelongsTo
     {
         return $this->belongsTo(User::class, 'uploaded_by');

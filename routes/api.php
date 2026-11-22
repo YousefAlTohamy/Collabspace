@@ -60,7 +60,7 @@ Route::prefix('v1')->group(function (): void {
         // Tasks (shallow nesting: create under the project, then by task id).
         Route::get('/projects/{project}/tasks', [TaskController::class, 'index'])->whereNumber('project');
         Route::post('/projects/{project}/tasks', [TaskController::class, 'store'])->whereNumber('project');
-        Route::get('/tasks', [TaskController::class, 'indexAll'])->name('tasks.index');
+        Route::get('/tasks', [TaskController::class, 'indexAll']);
         Route::get('/tasks/{task}', [TaskController::class, 'show'])->whereNumber('task');
         Route::put('/tasks/{task}', [TaskController::class, 'update'])->whereNumber('task');
         Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->whereNumber('task');

@@ -9,6 +9,7 @@ use App\Http\Requests\StoreFileRequest;
 use App\Http\Resources\FileResource;
 use App\Models\Project;
 use App\Models\ProjectFile;
+use App\Support\Like;
 use App\Support\UploadRules;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Database\Eloquent\Builder;
@@ -38,17 +39,15 @@ class ProjectFileController extends Controller
      */
     public function indexAll(ListFilesRequest $request): AnonymousResourceCollection
     {
+        $user = $request->user();
         $query = ProjectFile::query()
             // R2: only files of projects I am a member of.
-            ->whereHas('project.members', fn (Builder $members) => $members->where('user_id', $request->user()->id))
+            ->whereHas('project', fn (Builder $project) => $project->visibleTo($user))
             ->with('uploader')
             ->orderByDesc('created_at');
 
-        if ($projectId = $request->validated('project_id')) {
-            $project = Project::query()->find($projectId);
-            abort_if($project === null, 403);
-            $this->authorize('view', $project); // R2: foreign project_id is 403
-
+        if (($projectId = $request->validated('project_id')) !== null) {
+            $project = Project::findVisibleOrFail($user, $projectId);
             $query->where('project_id', $project->id);
         }
 
@@ -127,8 +126,7 @@ class ProjectFileController extends Controller
     private function filtered(Builder $query, ListFilesRequest $request): Builder
     {
         if (($search = $request->validated('search')) !== null) {
-            $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
-            $query->where('original_name', 'like', '%'.$escaped.'%');
+            $query->where('original_name', 'like', Like::contains($search));
         }
 
         return $query;

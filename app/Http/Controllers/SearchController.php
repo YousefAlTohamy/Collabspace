@@ -9,15 +9,14 @@ use App\Http\Resources\SearchResource;
 use App\Models\Project;
 use App\Models\ProjectFile;
 use App\Models\Task;
-use Illuminate\Database\Eloquent\Builder;
+use App\Support\Like;
 
 class SearchController extends Controller
 {
     public function __invoke(SearchRequest $request): SearchResource
     {
-        $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $request->validated('q'));
-        $pattern = '%'.$escaped.'%';
-        $projects = Project::query()->whereHas('members', fn (Builder $members) => $members->where('user_id', $request->user()->id));
+        $pattern = Like::contains($request->validated('q'));
+        $projects = Project::query()->visibleTo($request->user());
         $projectIds = (clone $projects)->select('projects.id');
 
         return new SearchResource([

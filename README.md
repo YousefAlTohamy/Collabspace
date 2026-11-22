@@ -26,30 +26,30 @@ The full business rules and the API contract are in [`docs/SPEC.md`](docs/SPEC.m
 Everything is organized around the **project**: being a member of a project is the permission boundary for almost everything.
 
 - The creator of a project becomes its leader. A project always keeps at least one leader.
-- Only members can see anything that belongs to a project (tasks, files, members, chat channel, meetings). Everyone else gets `403`.
-- Task status flow: `todo → in_progress → in_review → completed`. A task is completed by its **reviewer** (or a leader, or an assignee when no reviewer is set).
+- Only project members can see its tasks, files, members, chat channel or meetings. Signed-in non-members get `403` on access attempts.
+- Tasks can move between `todo`, `in_progress` and `in_review` before completion. A task is completed by its **reviewer** (or a leader, or an assignee when no reviewer is set).
   Reopening a completed task is reserved for the reviewer or a leader. Completion forces progress to 100%.
 - A project can only be marked `done` when all of its tasks are completed. Project progress is always computed, never stored.
 - Assignees and reviewers must be members of the task's project. Removing a member also removes them from the project's assignments.
-- Direct chats are only allowed between users who share at least one project. Losing project membership removes chat access immediately.
-- Meetings are visible only to the organizer and participants. Participants must belong to the project, or share a project with the organizer.
+- Starting a direct chat requires a shared project. Losing membership removes access to that project's channel immediately.
+- Meetings are visible only to the organizer and participants. Project-linked meetings also require current membership. For a meeting without a project, invitees must share a project with the organizer.
 - Reports are computed from real task data (`created_at`, `completed_at`, `due_date`) for explicit time windows and compare each period with the previous one.
 
 See [`docs/SPEC.md`](docs/SPEC.md) for all rules (R1–R14), the data model and every endpoint.
 
 ## Security
 
-- **Authentication**: Sanctum bearer tokens with expiry (1 day, or 30 days with `remember`); password change and reset revoke other tokens.
-- **Authorization**: every endpoint that takes an id goes through a Policy (object-level checks); cross-project access is covered by tests.
+- **Authentication**: Sanctum bearer tokens expire after 1 day or 30 days with `remember`. Password change revokes other tokens and password reset revokes all tokens.
+- **Authorization**: endpoints enforce object-level access through policies or queries scoped to the user's memberships or records. Cross-project access is covered by tests.
   A test fails if a new route is added without authentication.
 - **Brute force protection**: rate limits on login (per email+IP and per IP), registration, password reset, uploads and the AI endpoints.
 - **No user enumeration**: the same response for unknown email and wrong password, and for forgot-password; login does equivalent hashing work on both paths.
-- **Uploads**: extension whitelist and real content (MIME) check, 10 MB limit, random names, private disk, no storage path in responses,
+- **Project files and chat attachments**: extension whitelist and real content (MIME) check, 10 MB limit, random names, private disk, no storage path in responses,
   downloads only through an authorized endpoint with `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`.
 - **Input handling**: Form Requests everywhere, explicit `$fillable`, server-owned fields (`created_by`, `user_id`, ...) are never read from input,
   `LIKE` wildcards are escaped, meeting links must be `https`.
-- **Responses**: API Resources only (no raw models), other users' email/phone are never exposed, errors are JSON without stack traces.
-- **AI**: provider key only in `.env`; no user or project data is sent to the provider; failures return a generic `503` and store nothing.
+- **Responses**: API Resources for models, other users' email/phone are never exposed, and errors are JSON without stack traces when `APP_DEBUG=false`.
+- **AI**: the provider key is configured in `.env`. The assistant sends the user's message and bounded thread history. Meeting summaries send transcript text. Provider failures return a generic `503` without saving a message or summary.
 
 ## Architecture
 
@@ -84,14 +84,20 @@ cd Collabspace
 cp .env.example .env
 ```
 
-Install dependencies (needed once, even if PHP/Composer are not installed locally):
+Install dependencies once. On Linux, macOS or WSL2:
 
 ```bash
 docker run --rm -u "$(id -u):$(id -g)" -v "$(pwd):/var/www/html" -w /var/www/html \
   laravelsail/php84-composer:latest composer install --ignore-platform-reqs
 ```
 
-Start the stack and prepare the app. On Linux, macOS and WSL2 use Sail:
+On Windows PowerShell:
+
+```powershell
+docker run --rm -v "${PWD}:/var/www/html" -w /var/www/html laravelsail/php84-composer:latest composer install --ignore-platform-reqs
+```
+
+Start the stack and prepare the app. Wait for MySQL to become healthy before running migrations. On Linux, macOS and WSL2 use Sail:
 
 ```bash
 ./vendor/bin/sail up -d
@@ -109,8 +115,8 @@ docker compose exec laravel.test php artisan migrate:fresh --seed
 docker compose exec laravel.test php artisan storage:link
 ```
 
-The API is then available at `http://localhost/api/v1` and emails (password reset) arrive in Mailpit at `http://localhost:8025`.
-If port 80 is busy, set `APP_PORT` in `.env`.
+The API is then available at `http://localhost:8000/api/v1` and emails (password reset) arrive in Mailpit at `http://localhost:8025`.
+If port 8000 is busy, update `APP_PORT` and `APP_URL` in `.env`.
 
 In the `local` environment, `--seed` also loads **demo data** (see below). In any other environment only the four teams are seeded.
 
@@ -118,7 +124,7 @@ In the `local` environment, `--seed` also loads **demo data** (see below). In an
 
 | Variable | Purpose |
 |---|---|
-| `APP_URL`, `FRONTEND_URL` | API URL; frontend origin (used for CORS and the password reset link) |
+| `APP_URL`, `FRONTEND_URL` | API URL and comma-separated frontend origins for CORS. The first origin is used for password reset links. |
 | `DB_*` | MySQL connection (preconfigured for Sail) |
 | `MAIL_*` | Mail transport (Mailpit in development) |
 | `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT` | Any OpenAI-compatible chat-completions provider. Without them the AI endpoints answer `503` |
@@ -129,7 +135,7 @@ Set `APP_DEBUG=false` outside local development.
 
 ```bash
 ./vendor/bin/sail artisan test          # Windows: docker compose exec laravel.test php artisan test
-./vendor/bin/sail bin pint --test       # code style
+./vendor/bin/sail bin pint --test       # Windows: docker compose exec laravel.test ./vendor/bin/pint --test
 ```
 
 Tests run against a real MySQL `testing` database (reports use SQL date functions). AI calls are always faked.
@@ -143,7 +149,7 @@ Password for all accounts: `Password123`
 | Mohamed Salah | `mohamed@collabspace.test` | Leader of **Alpha** (best account to explore) |
 | Mohanad Wahib | `mohanad@collabspace.test` | Backend Engineer |
 | Sara Hassan | `sara@collabspace.test` | UI Designer |
-| Ali Mohamed | `ali@collabspace.test` | Frontend Developer, reviewer of some tasks |
+| Ali Mohamed | `ali@collabspace.test` | Frontend Developer, reviewer of Mobile responsiveness |
 | Khalid Mousa | `khalid@collabspace.test` | Backend Developer |
 | Mahmoud Salah | `mahmoud@collabspace.test` | Marketing Lead |
 
@@ -154,16 +160,16 @@ chat messages, upcoming meetings, a meeting with transcript and summary, notific
 
 Import [`postman/Collabspace.postman_collection.json`](postman/Collabspace.postman_collection.json). It covers every endpoint, grouped by module.
 
-1. The `baseUrl` collection variable is `http://localhost/api/v1` (change it if your port differs).
+1. Set the `baseUrl` collection variable to `http://localhost:8000/api/v1` for the default local stack.
 2. Run **Auth → Login (saves token)** with a demo account (set the `email` and `password` collection variables, e.g. `mohamed@collabspace.test` / `Password123`).
-   The token is saved automatically and sent as a Bearer token by every other request.
+   The token is saved automatically and sent as a Bearer token on authenticated requests.
    Or start fresh: **Register** creates a new user, **Register helper: second user** creates a teammate.
 3. Ids such as `projectId`, `taskId`, `fileId`, `meetingId` are saved by the "create" requests, so you can run the folders in order.
 4. File uploads need you to pick a file in the request body. The AI requests need the `AI_*` variables in `.env`.
 
 ## Endpoint overview
 
-All routes live under `/api/v1`. Only `auth/register`, `auth/login`, `auth/forgot-password` and `auth/reset-password` are public.
+All 63 API routes live under `/api/v1`. Only `auth/register`, `auth/login`, `auth/forgot-password` and `auth/reset-password` are public.
 
 | Area | Endpoints |
 |---|---|

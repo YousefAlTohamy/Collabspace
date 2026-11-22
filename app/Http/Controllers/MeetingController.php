@@ -33,7 +33,7 @@ class MeetingController extends Controller
             ->where(fn (Builder $mine) => $mine->where('created_by', $actor->id)
                 ->orWhereHas('participants', fn (Builder $participants) => $participants->whereKey($actor->id)))
             ->where(fn (Builder $visible) => $visible->whereNull('project_id')
-                ->orWhereHas('project.members', fn (Builder $members) => $members->where('user_id', $actor->id)))
+                ->orWhereHas('project', fn (Builder $project) => $project->visibleTo($actor)))
             ->where('starts_at', '>=', $from)
             ->where('starts_at', '<', $to)
             ->with(self::RELATIONS)

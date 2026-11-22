@@ -45,6 +45,7 @@ class TasksTest extends TestCase
 
     public function test_cross_project_idor_on_every_task_route(): void
     {
+        config(['app.debug' => false]);
         $task = Task::factory()->forProject($this->project->id)->create();
         $stranger = Project::factory()->create()->creator;
         $payload = ['title' => 'X', 'priority' => 'low'];
@@ -55,7 +56,10 @@ class TasksTest extends TestCase
         $this->actingAs($stranger, 'sanctum')->putJson('/api/v1/tasks/'.$task->id, $payload)->assertForbidden();
         $this->actingAs($stranger, 'sanctum')->deleteJson('/api/v1/tasks/'.$task->id)->assertForbidden();
         $this->actingAs($stranger, 'sanctum')->patchJson('/api/v1/tasks/'.$task->id.'/status', ['status' => 'in_progress'])->assertForbidden();
-        $this->getJson('/api/v1/tasks?project_id='.$this->project->id)->assertForbidden();
+        foreach ([$this->project->id, 999999999] as $projectId) {
+            $this->getJson('/api/v1/tasks?project_id='.$projectId)
+                ->assertForbidden()->assertExactJson(['message' => 'This action is unauthorized.']);
+        }
     }
 
     public function test_member_can_create_a_task(): void

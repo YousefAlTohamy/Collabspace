@@ -18,6 +18,7 @@ use App\Models\Conversation;
 use App\Models\Project;
 use App\Models\User;
 use App\Notifications\AddedToProject;
+use App\Support\Like;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -38,13 +39,12 @@ class ProjectController extends Controller
     {
         $query = Project::query()
             // R2: lists never include projects the user is not a member of.
-            ->whereHas('members', fn (Builder $members) => $members->where('user_id', $request->user()->id))
+            ->visibleTo($request->user())
             ->with(['members.user', 'members.team'])
             ->withCount(['members', 'files', 'tasks', 'tasks as tasks_completed_count' => fn (Builder $tasks) => $tasks->where('status', TaskStatus::Completed->value)]);
 
         if ($search = $request->validated('search')) {
-            $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
-            $query->where('name', 'like', '%'.$escaped.'%');
+            $query->where('name', 'like', Like::contains($search));
         }
 
         if ($status = $request->validated('status')) {

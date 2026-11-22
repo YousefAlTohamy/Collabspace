@@ -43,6 +43,7 @@ class ProjectFilesTest extends TestCase
 
     public function test_requires_authentication_and_blocks_cross_project_idor(): void
     {
+        config(['app.debug' => false]);
         Storage::fake('local');
         $file = ProjectFile::factory()->for($this->project, 'project')->for($this->leader, 'uploader')->create();
         $stranger = Project::factory()->create()->creator;
@@ -55,7 +56,10 @@ class ProjectFilesTest extends TestCase
             ->assertForbidden();
         // Global lists are scoped, so a non-member sees an empty page, not 403.
         $this->actingAs($stranger, 'sanctum')->getJson('/api/v1/files')->assertOk()->assertJsonCount(0, 'data');
-        $this->getJson('/api/v1/files?project_id='.$this->project->id)->assertForbidden();
+        foreach ([$this->project->id, 999999999] as $projectId) {
+            $this->getJson('/api/v1/files?project_id='.$projectId)
+                ->assertForbidden()->assertExactJson(['message' => 'This action is unauthorized.']);
+        }
         $this->actingAs($stranger, 'sanctum')->getJson('/api/v1/files/'.$file->id.'/download')->assertForbidden();
         $this->actingAs($stranger, 'sanctum')->deleteJson('/api/v1/files/'.$file->id)->assertForbidden();
     }

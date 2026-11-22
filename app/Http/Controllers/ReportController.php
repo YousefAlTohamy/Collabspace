@@ -11,7 +11,7 @@ use App\Http\Requests\StoreReportRequest;
 use App\Http\Resources\ReportResource;
 use App\Models\Project;
 use App\Models\Report;
-use Illuminate\Auth\Access\AuthorizationException;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
@@ -20,7 +20,7 @@ class ReportController extends Controller
 {
     public function overview(ReportOverviewRequest $request, ComputeReportStats $stats): JsonResponse
     {
-        $project = $this->authorizedProject($request->validated('project_id'));
+        $project = $this->authorizedProject($request->user(), $request->validated('project_id'));
         [$from, $to] = $request->window();
 
         return response()->json(['data' => $stats->execute($request->user(), $project, $from, $to)]);
@@ -28,7 +28,7 @@ class ReportController extends Controller
 
     public function store(StoreReportRequest $request, ComputeReportStats $stats): JsonResponse
     {
-        $project = $this->authorizedProject($request->validated('project_id'));
+        $project = $this->authorizedProject($request->user(), $request->validated('project_id'));
         [$from, $to] = $request->window();
         $report = new Report($request->safe()->except('project_id'));
         $report->user_id = $request->user()->id;
@@ -55,16 +55,8 @@ class ReportController extends Controller
         return new ReportResource($report->load('project'));
     }
 
-    private function authorizedProject(int|string|null $id): ?Project
+    private function authorizedProject(User $user, int|string|null $id): ?Project
     {
-        if ($id === null) {
-            return null;
-        }
-
-        $project = Project::query()->find($id);
-        throw_if($project === null, AuthorizationException::class);
-        Gate::authorize('view', $project);
-
-        return $project;
+        return $id === null ? null : Project::findVisibleOrFail($user, $id);
     }
 }
