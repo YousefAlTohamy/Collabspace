@@ -22,11 +22,10 @@ class TaskResource extends JsonResource
         return [
             'id' => $this->id,
             'project_id' => $this->project_id,
-            // Only on GET /tasks, where the project context is not in the URL.
-            'project' => $this->when($request->routeIs('tasks.index'), fn () => $this->whenLoaded('project', fn (): array => [
+            'project' => $this->whenLoaded('project', fn (): array => [
                 'id' => $this->project_id,
                 'name' => $this->project->name,
-            ])),
+            ]),
             'title' => $this->title,
             'description' => $this->description,
             'status' => $this->status->value,

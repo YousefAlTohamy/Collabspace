@@ -21,6 +21,21 @@ class StoreFileRequest extends FormRequest
         'jpeg', 'webp', 'txt', 'csv', 'md', 'json', 'sql', 'zip',
     ];
 
+    // Libmagic can identify the Office container or plain text without identifying its specific format.
+    private const MIME_FALLBACKS = [
+        'docx' => ['application/zip'],
+        'xlsx' => ['application/zip'],
+        'pptx' => ['application/zip'],
+        'doc' => ['application/x-ole-storage', 'application/cdfv2'],
+        'xls' => ['application/x-ole-storage', 'application/cdfv2'],
+        'ppt' => ['application/x-ole-storage', 'application/cdfv2'],
+        'json' => ['application/json', 'text/plain'],
+        'md' => ['text/plain'],
+        'csv' => ['text/plain'],
+        'sql' => ['text/plain'],
+        'txt' => ['text/plain'],
+    ];
+
     public function authorize(): bool
     {
         return $this->user()->can('view', $this->route('project'));
@@ -36,17 +51,20 @@ class StoreFileRequest extends FormRequest
             'file' => [
                 'bail',
                 'required',
-                Rule::file()->types(self::ALLOWED_TYPES)->extensions(self::ALLOWED_TYPES)->max(10 * 1024),
+                Rule::file()->extensions(self::ALLOWED_TYPES)->max(10 * 1024),
                 function (string $attribute, UploadedFile $file, Closure $fail): void {
                     $extension = strtolower($file->getClientOriginalExtension());
-                    $mime = $file->getMimeType();
+                    $mime = $file->getMimeType() ?? '';
 
-                    // Plain Markdown, CSV and SQL sometimes have no distinct MIME signature.
-                    if ($mime === 'text/plain' && in_array($extension, ['md', 'csv', 'sql'], true)) {
+                    if (in_array(strtolower($mime), self::MIME_FALLBACKS[$extension] ?? [], true)) {
                         return;
                     }
 
-                    if (! in_array($mime, MimeTypes::getDefault()->getMimeTypes($extension), true)) {
+                    // Preserve Laravel's guessed-extension whitelist for all other MIME types.
+                    $mimeTypes = MimeTypes::getDefault();
+                    $guessedExtension = $mimeTypes->getExtensions($mime)[0] ?? null;
+                    if (! in_array($guessedExtension, self::ALLOWED_TYPES, true)
+                        || ! in_array($mime, $mimeTypes->getMimeTypes($extension), true)) {
                         $fail('The file content must match its extension.');
                     }
                 },
