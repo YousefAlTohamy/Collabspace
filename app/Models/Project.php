@@ -8,7 +8,9 @@ use App\Enums\ProjectPriority;
 use App\Enums\ProjectRole;
 use App\Enums\ProjectStatus;
 use Database\Factories\ProjectFactory;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -34,6 +36,16 @@ class Project extends Model
             'end_date' => 'date',
             'completed_at' => 'datetime',
         ];
+    }
+
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        return $query->whereHas('members', fn (Builder $members) => $members->where('user_id', $user->id));
+    }
+
+    public static function findVisibleOrFail(User $user, int|string $id): self
+    {
+        return self::query()->visibleTo($user)->find($id) ?? throw new AuthorizationException;
     }
 
     public function members(): HasMany

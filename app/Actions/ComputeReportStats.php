@@ -18,7 +18,7 @@ class ComputeReportStats
         // Database timestamps have second precision. The two inclusive windows must not overlap.
         $from = $from->startOfSecond();
         $to = $to->startOfSecond();
-        $projects = Project::query()->whereHas('members', fn (Builder $members) => $members->where('user_id', $user->id));
+        $projects = Project::query()->visibleTo($user);
         if ($project !== null) {
             $projects->whereKey($project->id);
         }

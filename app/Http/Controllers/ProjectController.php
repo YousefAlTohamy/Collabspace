@@ -18,6 +18,7 @@ use App\Models\Conversation;
 use App\Models\Project;
 use App\Models\User;
 use App\Notifications\AddedToProject;
+use App\Support\Like;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -25,8 +26,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use League\Flysystem\UnableToDeleteDirectory;
 
 class ProjectController extends Controller
 {
@@ -36,13 +39,12 @@ class ProjectController extends Controller
     {
         $query = Project::query()
             // R2: lists never include projects the user is not a member of.
-            ->whereHas('members', fn (Builder $members) => $members->where('user_id', $request->user()->id))
+            ->visibleTo($request->user())
             ->with(['members.user', 'members.team'])
             ->withCount(['members', 'files', 'tasks', 'tasks as tasks_completed_count' => fn (Builder $tasks) => $tasks->where('status', TaskStatus::Completed->value)]);
 
         if ($search = $request->validated('search')) {
-            $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
-            $query->where('name', 'like', '%'.$escaped.'%');
+            $query->where('name', 'like', Like::contains($search));
         }
 
         if ($status = $request->validated('status')) {
@@ -142,9 +144,22 @@ class ProjectController extends Controller
 
         // R7: once the rows are gone, the stored files have no owner anymore.
         $disk = Storage::disk('local');
-        $projectFilesRemoved = $disk->deleteDirectory('projects/'.$project->id);
-        $chatFilesRemoved = $channelId === null || $disk->deleteDirectory('chat/'.$channelId);
-        abort_unless($projectFilesRemoved && $chatFilesRemoved, 500);
+        $directories = ['projects/'.$project->id];
+        if ($channelId !== null) {
+            $directories[] = 'chat/'.$channelId;
+        }
+
+        foreach ($directories as $directory) {
+            try {
+                $removed = $disk->deleteDirectory($directory);
+            } catch (UnableToDeleteDirectory) {
+                $removed = false;
+            }
+
+            if (! $removed) {
+                Log::warning('Project storage cleanup failed.', ['project_id' => $project->id]);
+            }
+        }
 
         return response()->json(['message' => __('Project deleted.')]);
     }

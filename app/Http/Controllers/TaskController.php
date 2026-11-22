@@ -16,6 +16,7 @@ use App\Models\ProjectMember;
 use App\Models\Task;
 use App\Models\User;
 use App\Notifications\TaskAssigned;
+use App\Support\Like;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -45,18 +46,16 @@ class TaskController extends Controller
      */
     public function indexAll(ListTasksRequest $request): AnonymousResourceCollection
     {
+        $user = $request->user();
         $query = Task::query()
             // R2: only tasks of projects I am a member of.
-            ->whereHas('project.members', fn (Builder $members) => $members->where('user_id', $request->user()->id))
+            ->whereHas('project', fn (Builder $project) => $project->visibleTo($user))
             ->with(['reviewer', 'assignees', 'project'])
             ->withCount('comments')
             ->orderByDesc('created_at');
 
-        if ($projectId = $request->validated('project_id')) {
-            $project = Project::query()->find($projectId);
-            abort_if($project === null, 403);
-            $this->authorize('view', $project); // R2: a foreign project_id is 403, not a leak
-
+        if (($projectId = $request->validated('project_id')) !== null) {
+            $project = Project::findVisibleOrFail($user, $projectId);
             $query->where('project_id', $project->id);
         }
 
@@ -200,8 +199,7 @@ class TaskController extends Controller
         }
 
         if (($search = $request->validated('search')) !== null) {
-            $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
-            $query->where('title', 'like', '%'.$escaped.'%');
+            $query->where('title', 'like', Like::contains($search));
         }
 
         return $query;

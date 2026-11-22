@@ -20,7 +20,7 @@ class BuildDashboard
     public function execute(User $user): array
     {
         $now = CarbonImmutable::now('UTC');
-        $projects = Project::query()->whereHas('members', fn (Builder $members) => $members->where('user_id', $user->id));
+        $projects = Project::query()->visibleTo($user);
         $projectIds = (clone $projects)->select('projects.id');
         $projectTasks = Task::query()->whereIn('project_id', $projectIds);
         $assigned = (clone $projectTasks)->whereHas('assignees', fn (Builder $users) => $users->whereKey($user->id));
@@ -72,7 +72,7 @@ class BuildDashboard
             ->where(fn (Builder $mine) => $mine->where('created_by', $user->id)
                 ->orWhereHas('participants', fn (Builder $participants) => $participants->whereKey($user->id)))
             ->where(fn (Builder $visible) => $visible->whereNull('project_id')
-                ->orWhereHas('project.members', fn (Builder $members) => $members->where('user_id', $user->id)))
+                ->orWhereHas('project', fn (Builder $project) => $project->visibleTo($user)))
             ->where('starts_at', '>=', $now)
             ->with(['organizer', 'participants', 'project'])
             ->orderBy('starts_at')->orderBy('id')->limit(5)->get();

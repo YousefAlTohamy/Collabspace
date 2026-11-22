@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Enums\AvailabilityStatus;
@@ -8,7 +10,6 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
@@ -54,11 +55,6 @@ class User extends Authenticatable
         return $this->projects()
             ->whereIn('projects.id', $other->projects()->getQuery()->select('projects.id'))
             ->exists();
-    }
-
-    public function tasks(): HasMany
-    {
-        return $this->hasMany(Task::class, 'created_by');
     }
 
     public function assignedTasks(): BelongsToMany

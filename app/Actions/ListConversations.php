@@ -18,7 +18,7 @@ class ListConversations
 
         return Conversation::query()
             ->where(function (Builder $mine) use ($user): void {
-                $mine->whereHas('project.members', fn (Builder $members) => $members->where('user_id', $user->id))
+                $mine->whereHas('project', fn (Builder $project) => $project->visibleTo($user))
                     ->orWhere('user_one_id', $user->id)
                     ->orWhere('user_two_id', $user->id);
             })

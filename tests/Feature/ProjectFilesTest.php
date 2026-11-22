@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\Conversation;
 use App\Models\Project;
 use App\Models\ProjectFile;
 use App\Models\ProjectMember;
@@ -11,7 +12,9 @@ use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use League\Flysystem\UnableToDeleteDirectory;
 use Tests\TestCase;
 
 class ProjectFilesTest extends TestCase
@@ -40,6 +43,7 @@ class ProjectFilesTest extends TestCase
 
     public function test_requires_authentication_and_blocks_cross_project_idor(): void
     {
+        config(['app.debug' => false]);
         Storage::fake('local');
         $file = ProjectFile::factory()->for($this->project, 'project')->for($this->leader, 'uploader')->create();
         $stranger = Project::factory()->create()->creator;
@@ -52,7 +56,10 @@ class ProjectFilesTest extends TestCase
             ->assertForbidden();
         // Global lists are scoped, so a non-member sees an empty page, not 403.
         $this->actingAs($stranger, 'sanctum')->getJson('/api/v1/files')->assertOk()->assertJsonCount(0, 'data');
-        $this->getJson('/api/v1/files?project_id='.$this->project->id)->assertForbidden();
+        foreach ([$this->project->id, 999999999] as $projectId) {
+            $this->getJson('/api/v1/files?project_id='.$projectId)
+                ->assertForbidden()->assertExactJson(['message' => 'This action is unauthorized.']);
+        }
         $this->actingAs($stranger, 'sanctum')->getJson('/api/v1/files/'.$file->id.'/download')->assertForbidden();
         $this->actingAs($stranger, 'sanctum')->deleteJson('/api/v1/files/'.$file->id)->assertForbidden();
     }
@@ -294,5 +301,27 @@ class ProjectFilesTest extends TestCase
             ->assertOk();
 
         Storage::disk('local')->assertMissing("projects/{$this->project->id}");
+    }
+
+    public function test_project_delete_succeeds_when_private_storage_cleanup_fails(): void
+    {
+        $projectId = $this->project->id;
+        $channelId = Conversation::query()->where('project_id', $projectId)->sole()->id;
+        $disk = Storage::fake('local');
+        Storage::shouldReceive('disk')->with('local')->andReturn(\Mockery::mock($disk, function ($mock) use ($projectId, $channelId): void {
+            $mock->shouldReceive('deleteDirectory')->once()->with("projects/{$projectId}")
+                ->andThrow(UnableToDeleteDirectory::atLocation('private project storage'));
+            $mock->shouldReceive('deleteDirectory')->once()->with("chat/{$channelId}")->andReturnFalse();
+        }));
+        Log::shouldReceive('warning')->twice()
+            ->with('Project storage cleanup failed.', ['project_id' => $projectId]);
+
+        $this->actingAs($this->leader, 'sanctum')
+            ->deleteJson("/api/v1/projects/{$projectId}")
+            ->assertOk()
+            ->assertExactJson(['message' => 'Project deleted.']);
+
+        $this->assertDatabaseMissing('projects', ['id' => $projectId]);
+        $this->assertDatabaseMissing('conversations', ['id' => $channelId]);
     }
 }
