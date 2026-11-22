@@ -19,7 +19,7 @@ class StoreReportRequest extends FormRequest
             'note' => ['nullable', 'string', 'max:2000'],
             'start_date' => ['required', 'date_format:Y-m-d'],
             'end_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:start_date'],
-            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            'project_id' => ['nullable', 'integer'],
         ];
     }
 

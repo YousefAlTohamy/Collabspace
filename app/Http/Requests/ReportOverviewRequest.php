@@ -16,7 +16,7 @@ class ReportOverviewRequest extends FormRequest
     {
         return [
             'period' => ['nullable', 'string', Rule::in(array_keys(self::DAYS))],
-            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            'project_id' => ['nullable', 'integer'],
         ];
     }
 

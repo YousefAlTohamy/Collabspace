@@ -80,13 +80,20 @@ class ReportsTest extends TestCase
 
     public function test_report_requests_validate_period_dates_and_project_access(): void
     {
+        config(['app.debug' => false]);
         $user = User::factory()->create();
         $project = Project::factory()->create();
+        $missingId = $project->id + 1;
+        $forbidden = ['message' => 'This action is unauthorized.'];
         $uri = '/api/v1/reports/overview';
         $this->getJson($uri)->assertUnauthorized();
         $this->actingAs($user, 'sanctum')->getJson($uri.'?period=quarter')->assertUnprocessable()->assertJsonValidationErrors('period');
-        $this->getJson($uri.'?project_id='.$project->id)->assertForbidden();
-        $this->postJson('/api/v1/reports', $this->reportPayload() + ['project_id' => $project->id])->assertForbidden();
+        $this->assertDatabaseMissing('projects', ['id' => $missingId]);
+        foreach ([$project->id, $missingId] as $projectId) {
+            $this->getJson($uri.'?project_id='.$projectId)->assertForbidden()->assertExactJson($forbidden);
+            $this->postJson('/api/v1/reports', $this->reportPayload() + ['project_id' => $projectId])
+                ->assertForbidden()->assertExactJson($forbidden);
+        }
 
         $this->postJson('/api/v1/reports', ['end_date' => '2026-02-01'] + $this->reportPayload())
             ->assertUnprocessable()->assertJsonValidationErrors('end_date');

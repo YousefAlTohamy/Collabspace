@@ -11,6 +11,7 @@ use App\Http\Requests\StoreReportRequest;
 use App\Http\Resources\ReportResource;
 use App\Models\Project;
 use App\Models\Report;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
@@ -60,7 +61,8 @@ class ReportController extends Controller
             return null;
         }
 
-        $project = Project::query()->findOrFail($id);
+        $project = Project::query()->find($id);
+        throw_if($project === null, AuthorizationException::class);
         Gate::authorize('view', $project);
 
         return $project;

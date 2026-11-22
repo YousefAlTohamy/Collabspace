@@ -32,12 +32,9 @@ class AiController extends Controller
     {
         $userId = $request->user()->id;
         $content = $request->validated('content');
-        $history = AiMessage::query()->where('user_id', $userId)->latest('id')->limit(20)->get()
-            ->reverse()->map(fn (AiMessage $message): array => ['role' => $message->role->value, 'content' => $message->content])->values()->all();
-
         $answer = $ai->chat([
             ['role' => 'system', 'content' => self::SYSTEM_PROMPT],
-            ...$history,
+            ...$this->boundedHistory($userId),
             ['role' => AiRole::User->value, 'content' => $content],
         ]);
 
@@ -65,5 +62,26 @@ class AiController extends Controller
         AiMessage::query()->where('user_id', $request->user()->id)->delete();
 
         return response()->json(['message' => __('AI history cleared.')]);
+    }
+
+    /** @return list<array{role: string, content: string}> */
+    private function boundedHistory(int $userId): array
+    {
+        $messages = AiMessage::query()->where('user_id', $userId)->latest('id')->limit(20)->get();
+        $remaining = 12000;
+        $history = [];
+
+        foreach ($messages as $message) {
+            $content = mb_substr($message->content, 0, 2000);
+            $length = mb_strlen($content);
+            if ($length > $remaining) {
+                break;
+            }
+
+            $history[] = ['role' => $message->role->value, 'content' => $content];
+            $remaining -= $length;
+        }
+
+        return array_reverse($history);
     }
 }

@@ -93,6 +93,29 @@ class MeetingsTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_meeting_create_and_update_return_the_same_403_for_missing_and_foreign_projects(): void
+    {
+        config(['app.debug' => false]);
+        $project = Project::factory()->create();
+        $foreign = Project::factory()->create();
+        $missingId = $foreign->id + 1;
+        $forbidden = ['message' => 'This action is unauthorized.'];
+        $uri = '/api/v1/meetings';
+        $id = $this->actingAs($project->creator, 'sanctum')
+            ->postJson($uri, $this->payload() + ['project_id' => $project->id])
+            ->assertCreated()->json('data.id');
+
+        $this->assertDatabaseMissing('projects', ['id' => $missingId]);
+        foreach ([$foreign->id, $missingId] as $projectId) {
+            $payload = $this->payload() + ['project_id' => $projectId];
+            $this->postJson($uri, $payload)->assertForbidden()->assertExactJson($forbidden);
+            $this->putJson($uri.'/'.$id, $payload)->assertForbidden()->assertExactJson($forbidden);
+        }
+
+        $this->assertDatabaseCount('meetings', 1);
+        $this->assertDatabaseHas('meetings', ['id' => $id, 'project_id' => $project->id]);
+    }
+
     public function test_unlinked_meeting_requires_participants_to_share_a_project(): void
     {
         $project = Project::factory()->create();

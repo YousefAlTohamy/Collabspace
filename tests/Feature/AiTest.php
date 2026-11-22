@@ -80,6 +80,39 @@ class AiTest extends TestCase
         });
     }
 
+    public function test_ai_keeps_the_newest_history_within_the_character_budget(): void
+    {
+        $owner = User::factory()->create();
+        AiMessage::factory()->count(20)->sequence(fn (Sequence $sequence): array => [
+            'content' => sprintf('%02d:', $sequence->index).str_repeat('é', 19997),
+        ])->create(['user_id' => $owner->id, 'role' => AiRole::Assistant]);
+        $question = str_repeat('é', 4000);
+        Http::fake([self::ENDPOINT => Http::response(['choices' => [['message' => ['content' => 'Answer']]]])]);
+
+        $this->actingAs($owner, 'sanctum')->postJson('/api/v1/ai/messages', ['content' => $question])->assertCreated();
+
+        Http::assertSent(function (Request $request) use ($question): bool {
+            $messages = $request->data()['messages'];
+            $this->assertCount(8, $messages);
+            $this->assertSame([
+                'role' => 'system',
+                'content' => 'You are the Collabspace assistant. Give concise answers. You have no access to user projects or data.',
+            ], $messages[0]);
+            $history = array_slice($messages, 1, -1);
+            $this->assertSame(
+                array_map(fn (int $index): array => [
+                    'role' => 'assistant',
+                    'content' => sprintf('%02d:', $index).str_repeat('é', 1997),
+                ], range(14, 19)),
+                $history
+            );
+            $this->assertSame(12000, array_sum(array_map('mb_strlen', array_column($history, 'content'))));
+            $this->assertSame(['role' => 'user', 'content' => $question], $messages[7]);
+
+            return $request->url() === self::ENDPOINT;
+        });
+    }
+
     public function test_missing_configuration_does_not_contact_provider_or_store_messages(): void
     {
         Http::fake();
