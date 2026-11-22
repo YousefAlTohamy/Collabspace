@@ -95,6 +95,9 @@ Download only via authorized endpoint (R2). Deleting a project removes its store
 - `tasks_vs_deadline` (per month): % of tasks completed in that month that were completed on or before `due_date`.
 - `projects_progress` (per month): cumulative completed tasks / all tasks created up to that month end, in %.
 - `worker_activity` (per month): number of tasks completed in that month.
+- Period windows end now: `week` = 7 days, `month` = 30, `three_months` = 90, `year` = 365 (UTC). The previous period is the same length right before.
+  Rates are evaluated *as of the end of a window*: tasks `completed_at <= end` / tasks `created_at <= end`; projects `completed_at <= end` / projects `created_at <= end`.
+  Monthly series use the calendar months touched by the window. `teams_activity_rate` uses the current members.
 - Each rate also returns `change_vs_last_period` (difference in percentage points against the previous period of the same length).
 - A **submitted report** stores `type` (`project_progress|task_performance|team_activity`), `note`, date range, optional project,
   and a JSON snapshot of the computed stats at submit time. Only its author can read it.
@@ -118,7 +121,7 @@ Enums are lowercase snake strings.
 
 - **users**: name, email (unique), password, phone?, job_title?, years_of_experience?, bio?, availability_status (`available|busy|away`, default `available`), avatar_path?
 - **teams**: name — seeded: UI/UX, Frontend, Backend, Marketing.
-- **projects**: name, description?, type? (free text e.g. "SaaS"), priority (`low|medium|high`), status (`active|done`, default `active`), start_date, end_date, created_by (user).
+- **projects**: name, description?, type? (free text e.g. "SaaS"), priority (`low|medium|high`), status (`active|done`, default `active`), start_date, end_date, created_by (user), completed_at? (set when status becomes `done`, cleared when it goes back to `active`).
 - **project_members**: project_id, user_id, role (`leader|member`), team_id?, job_title? — unique(project_id, user_id).
 - **tasks**: project_id, title, description?, status, priority, progress (0..100, default 0), start_date?, due_date?, reviewer_id?, created_by, completed_at?
 - **task_assignees**: task_id, user_id — unique pair.
