@@ -11,6 +11,7 @@ use App\Http\Resources\ProjectMemberResource;
 use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\User;
+use App\Notifications\AddedToProject;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
@@ -48,14 +49,22 @@ class ProjectMemberController extends Controller
     {
         $this->authorize('manageMembers', $project);
 
-        $member = $project->members()->create([
-            'user_id' => $request->validated('user_id'),
-            'role' => $request->validated('role') ?? ProjectRole::Member,
-            'team_id' => $request->validated('team_id'),
-            'job_title' => $request->validated('job_title'),
-        ]);
+        $member = DB::transaction(function () use ($request, $project): ProjectMember {
+            $member = $project->members()->create([
+                'user_id' => $request->validated('user_id'),
+                'role' => $request->validated('role') ?? ProjectRole::Member,
+                'team_id' => $request->validated('team_id'),
+                'job_title' => $request->validated('job_title'),
+            ])->load(['user', 'team']);
+            $actor = $request->user();
+            if ($member->user->id !== $actor->id) {
+                $member->user->notify(new AddedToProject($project->id, $actor));
+            }
 
-        return (new ProjectMemberResource($member->load(['user', 'team'])))
+            return $member;
+        });
+
+        return (new ProjectMemberResource($member))
             ->response()
             ->setStatusCode(201);
     }

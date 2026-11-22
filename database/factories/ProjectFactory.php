@@ -7,6 +7,7 @@ namespace Database\Factories;
 use App\Enums\ProjectPriority;
 use App\Enums\ProjectRole;
 use App\Enums\ProjectStatus;
+use App\Models\Conversation;
 use App\Models\Project;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -43,6 +44,8 @@ class ProjectFactory extends Factory
     public function configure(): static
     {
         return $this->afterCreating(function (Project $project): void {
+            Conversation::createProjectChannel($project);
+
             $project->members()->create([
                 'user_id' => $project->created_by,
                 'role' => ProjectRole::Leader,

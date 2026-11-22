@@ -13,7 +13,10 @@ use App\Http\Requests\UpdateProjectRequest;
 use App\Http\Resources\ProjectDetailResource;
 use App\Http\Resources\ProjectResource;
 use App\Http\Resources\ProjectTeamsResource;
+use App\Models\Conversation;
 use App\Models\Project;
+use App\Models\User;
+use App\Notifications\AddedToProject;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -21,6 +24,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 
 class ProjectController extends Controller
@@ -61,6 +65,7 @@ class ProjectController extends Controller
             $project = new Project($request->safe()->except('members'));
             $project->created_by = $request->user()->id;
             $project->save();
+            Conversation::createProjectChannel($project);
             // Pick up DB defaults (status = active) that are absent from the payload.
             $project->refresh();
 
@@ -70,7 +75,8 @@ class ProjectController extends Controller
                 'role' => ProjectRole::Leader,
             ]);
 
-            foreach ($request->validated('members', []) as $member) {
+            $members = $request->validated('members') ?? [];
+            foreach ($members as $member) {
                 $project->members()->create([
                     'user_id' => $member['user_id'],
                     'role' => $member['role'] ?? ProjectRole::Member,
@@ -78,6 +84,10 @@ class ProjectController extends Controller
                     'job_title' => $member['job_title'] ?? null,
                 ]);
             }
+
+            $actor = $request->user();
+            $added = User::query()->whereKey(array_column($members, 'user_id'))->whereKeyNot($actor->id)->get();
+            Notification::send($added, new AddedToProject($project->id, $actor));
 
             return $project;
         });
@@ -109,10 +119,19 @@ class ProjectController extends Controller
     {
         $this->authorize('delete', $project);
 
-        DB::transaction(fn () => $project->delete());
+        $channelId = DB::transaction(function () use ($project): ?int {
+            $channelId = Conversation::query()->where('project_id', $project->id)->value('id');
+
+            abort_unless($project->delete(), 500);
+
+            return $channelId;
+        });
 
         // R7: once the rows are gone, the stored files have no owner anymore.
-        abort_unless(Storage::disk('local')->deleteDirectory('projects/'.$project->id), 500);
+        $disk = Storage::disk('local');
+        $projectFilesRemoved = $disk->deleteDirectory('projects/'.$project->id);
+        $chatFilesRemoved = $channelId === null || $disk->deleteDirectory('chat/'.$channelId);
+        abort_unless($projectFilesRemoved && $chatFilesRemoved, 500);
 
         return response()->json(['message' => __('Project deleted.')]);
     }

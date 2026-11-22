@@ -14,6 +14,8 @@ use App\Http\Resources\TaskResource;
 use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\Task;
+use App\Models\User;
+use App\Notifications\TaskAssigned;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -21,6 +23,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
 
 class TaskController extends Controller
@@ -71,7 +74,8 @@ class TaskController extends Controller
             $task->project_id = $project->id;
             $task->created_by = $request->user()->id;
             $task->save();
-            $task->assignees()->sync($request->validated('assignee_ids') ?? []);
+            $changes = $task->assignees()->sync($request->validated('assignee_ids') ?? []);
+            $this->notifyAssigned($task, $request->user(), $changes['attached']);
 
             return $task->refresh();
         });
@@ -96,13 +100,17 @@ class TaskController extends Controller
      */
     public function update(UpdateTaskRequest $request, Task $task): TaskResource
     {
-        DB::transaction(function () use ($request, $task): void {
+        $task = DB::transaction(function () use ($request, $task): Task {
             $this->lockTaskMembers($task->project_id, $request);
+            $task = Task::query()->lockForUpdate()->findOrFail($task->id);
             $task->update($request->safe()->except('assignee_ids'));
 
             if ($request->safe()->has('assignee_ids')) {
-                $task->assignees()->sync($request->validated('assignee_ids'));
+                $changes = $task->assignees()->sync($request->validated('assignee_ids'));
+                $this->notifyAssigned($task, $request->user(), $changes['attached']);
             }
+
+            return $task;
         });
 
         return new TaskResource($task->load(['reviewer', 'assignees'])->loadCount('comments'));
@@ -133,6 +141,13 @@ class TaskController extends Controller
         $task = $action->execute($request->user(), $task, $to, $progress === null ? null : (int) $progress);
 
         return new TaskResource($task->load(['reviewer', 'assignees'])->loadCount('comments'));
+    }
+
+    /** @param list<int> $attached */
+    private function notifyAssigned(Task $task, User $actor, array $attached): void
+    {
+        $assignees = User::query()->whereKey($attached)->whereKeyNot($actor->id)->get();
+        Notification::send($assignees, new TaskAssigned($task->id, $task->project_id, $actor));
     }
 
     private function lockTaskMembers(int $projectId, StoreTaskRequest|UpdateTaskRequest $request): void
