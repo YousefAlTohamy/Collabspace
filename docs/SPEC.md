@@ -200,4 +200,4 @@ Stage tag in brackets = the stage that implements it.
 
 Daily status updates, table/timeline task views, chat threads/calls/realtime, team channels, file versioning, workflows,
 invites by email, email change, recent searches (client side), "hours worked", language switching (client side),
-overdue/reminder schedulers (optional only if the owner asks in S6), soft deletes, multi-tenant workspaces.
+soft deletes, multi-tenant workspaces.
