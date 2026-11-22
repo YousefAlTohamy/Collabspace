@@ -7,6 +7,7 @@ namespace App\Http\Requests;
 use App\Models\Project;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
@@ -30,7 +31,7 @@ class StoreMeetingRequest extends FormRequest
             'duration_minutes' => ['required', 'integer', 'min:15', 'max:480'],
             'meeting_url' => ['nullable', 'string', 'max:2048', 'url:https'],
             'note' => ['nullable', 'string', 'max:2000'],
-            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            'project_id' => ['nullable', 'integer'],
             'participant_ids' => ['sometimes', 'array', 'list'],
             'participant_ids.*' => ['bail', 'required', 'integer', 'distinct', Rule::notIn([$this->user()->id]), 'exists:users,id'],
         ];
@@ -58,7 +59,9 @@ class StoreMeetingRequest extends FormRequest
             $actor = $this->user();
             $projectId = $this->input('project_id', $meeting?->project_id);
             if ($projectId !== null) {
-                Gate::authorize('view', Project::query()->findOrFail($projectId));
+                $project = Project::query()->find($projectId);
+                throw_if($project === null, AuthorizationException::class);
+                Gate::authorize('view', $project);
             }
 
             $participants = $this->input('participant_ids')

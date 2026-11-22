@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'ai' => [
+        'base_url' => env('AI_BASE_URL'),
+        'api_key' => env('AI_API_KEY'),
+        'model' => env('AI_MODEL'),
+        'timeout' => env('AI_TIMEOUT', 30),
+    ],
+
 ];

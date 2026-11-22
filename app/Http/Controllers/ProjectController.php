@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\ProjectTeamsOverview;
 use App\Enums\ProjectRole;
+use App\Enums\ProjectStatus;
 use App\Enums\TaskStatus;
 use App\Http\Requests\ListProjectsRequest;
 use App\Http\Requests\StoreProjectRequest;
@@ -107,7 +108,19 @@ class ProjectController extends Controller
 
     public function update(UpdateProjectRequest $request, Project $project): ProjectDetailResource
     {
-        $project->update($request->validated());
+        $project = DB::transaction(function () use ($request, $project): Project {
+            $current = Project::query()->lockForUpdate()->findOrFail($project->id);
+            $current->fill($request->validated());
+
+            if ($current->isDirty('status')) {
+                $current->completed_at = $current->status === ProjectStatus::Done
+                    ? ($current->completed_at ?? now())
+                    : null;
+            }
+            $current->save();
+
+            return $current;
+        });
 
         return $this->detailResponse($project);
     }
