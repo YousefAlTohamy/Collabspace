@@ -3,7 +3,10 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectFileController;
 use App\Http\Controllers\ProjectMemberController;
+use App\Http\Controllers\TaskCommentController;
+use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -25,6 +28,7 @@ Route::prefix('v1')->group(function (): void {
         Route::put('/me', [ProfileController::class, 'update']);
         Route::post('/me/avatar', [ProfileController::class, 'avatar']);
         Route::put('/me/password', [ProfileController::class, 'password']);
+        Route::get('/me/stats', [ProfileController::class, 'stats']);
 
         Route::get('/users', UserController::class);
 
@@ -35,10 +39,37 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/projects/{project}', [ProjectController::class, 'show'])->whereNumber('project');
         Route::put('/projects/{project}', [ProjectController::class, 'update'])->whereNumber('project');
         Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->whereNumber('project');
+        Route::get('/projects/{project}/teams', [ProjectController::class, 'teams'])->whereNumber('project');
 
         Route::get('/projects/{project}/members', [ProjectMemberController::class, 'index'])->whereNumber('project');
         Route::post('/projects/{project}/members', [ProjectMemberController::class, 'store'])->whereNumber('project');
         Route::put('/projects/{project}/members/{user}', [ProjectMemberController::class, 'update'])->whereNumber('project', 'user');
         Route::delete('/projects/{project}/members/{user}', [ProjectMemberController::class, 'destroy'])->whereNumber('project', 'user');
+
+        // Tasks (shallow nesting: create under the project, then by task id).
+        Route::get('/projects/{project}/tasks', [TaskController::class, 'index'])->whereNumber('project');
+        Route::post('/projects/{project}/tasks', [TaskController::class, 'store'])->whereNumber('project');
+        Route::get('/tasks', [TaskController::class, 'indexAll'])->name('tasks.index');
+        Route::get('/tasks/{task}', [TaskController::class, 'show'])->whereNumber('task');
+        Route::put('/tasks/{task}', [TaskController::class, 'update'])->whereNumber('task');
+        Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->whereNumber('task');
+        Route::patch('/tasks/{task}/status', [TaskController::class, 'changeStatus'])->whereNumber('task');
+
+        // Task comments.
+        Route::get('/tasks/{task}/comments', [TaskCommentController::class, 'index'])->whereNumber('task');
+        Route::post('/tasks/{task}/comments', [TaskCommentController::class, 'store'])->whereNumber('task');
+        Route::put('/comments/{comment}', [TaskCommentController::class, 'update'])->whereNumber('comment');
+        Route::delete('/comments/{comment}', [TaskCommentController::class, 'destroy'])->whereNumber('comment');
+
+        // Files (R7).
+        Route::get('/projects/{project}/files', [ProjectFileController::class, 'index'])->whereNumber('project');
+        Route::post('/projects/{project}/files', [ProjectFileController::class, 'store'])
+            ->middleware('throttle:uploads')
+            ->whereNumber('project');
+        Route::get('/files', [ProjectFileController::class, 'indexAll']);
+        Route::get('/files/{file}/download', [ProjectFileController::class, 'download'])
+            ->name('files.download')
+            ->whereNumber('file');
+        Route::delete('/files/{file}', [ProjectFileController::class, 'destroy'])->whereNumber('file');
     });
 });

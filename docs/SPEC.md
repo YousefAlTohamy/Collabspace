@@ -50,6 +50,7 @@ discovered by its members (lists never include other projects). Non-member acces
 
 **R3 Task people.** Assignees and the reviewer must be members of the task's project (422 otherwise).
 A task can have 0..n assignees and 0..1 reviewer.
+When a member is removed from a project, they are also removed from the assignees of that project's tasks and cleared as reviewer.
 
 **R4 Task status flow.** Statuses: `todo`, `in_progress`, `in_review`, `completed`.
 - Moving between `todo`, `in_progress`, `in_review` is allowed for leader, creator and assignees.
@@ -150,9 +151,9 @@ Stage tag in brackets = the stage that implements it.
 
 ### Projects
 - `GET /teams` [S2]
-- `GET /projects` [S2] — `search`, `status`, `sort=newest|oldest`, `per_page`; each item has files_count, members (first 4), progress_percent.
+- `GET /projects` [S2] — `search`, `status`, `sort=newest|oldest`, `per_page`; each item has members (first 4), members_count; `files_count` and `progress_percent` are added in S3 (they depend on files/tasks).
 - `POST /projects` [S2] — name, description?, type?, priority, start_date, end_date, `members[]?` (`user_id, team_id?, job_title?, role?`)
-- `GET /projects/{project}` [S2] — overview: dates, priority, status, type, progress_percent, tasks counts by status, members.
+- `GET /projects/{project}` [S2] — overview: dates, priority, status, type, members; `progress_percent` and tasks counts by status are added in S3.
 - `PUT /projects/{project}` · `DELETE /projects/{project}` [S2]
 - `GET /projects/{project}/members` · `POST` · `PUT /projects/{project}/members/{user}` · `DELETE ...` [S2]
 - `GET /projects/{project}/teams` [S3] — teams with members and each member's tasks done/total (Teams tab and dashboard widget).

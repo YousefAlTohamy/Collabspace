@@ -16,6 +16,7 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ProjectMemberController extends Controller
@@ -100,7 +101,19 @@ class ProjectMemberController extends Controller
             ]);
         }
 
-        $member->delete();
+        DB::transaction(function () use ($project, $user, $member): void {
+            $member->delete();
+
+            // R3: leaving the project also drops their task assignments here.
+            DB::table('task_assignees')
+                ->whereIn('task_id', $project->tasks()->select('id'))
+                ->where('user_id', $user->id)
+                ->delete();
+
+            $project->tasks()
+                ->where('reviewer_id', $user->id)
+                ->update(['reviewer_id' => null]);
+        });
 
         return response()->json(['message' => __('Member removed.')]);
     }
