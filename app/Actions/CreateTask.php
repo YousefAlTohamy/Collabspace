@@ -1,0 +1,33 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Actions;
+
+use App\Models\Project;
+use App\Models\Task;
+use App\Models\User;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+
+class CreateTask
+{
+    public function __construct(
+        private readonly LockTaskMembers $lockMembers,
+        private readonly SyncTaskAssignees $syncAssignees,
+    ) {}
+
+    public function execute(User $actor, Project $project, array $attributes): Task
+    {
+        return DB::transaction(function () use ($actor, $project, $attributes): Task {
+            $this->lockMembers->execute($project->id, $attributes);
+            $task = new Task(Arr::except($attributes, ['assignee_ids']));
+            $task->project_id = $project->id;
+            $task->created_by = $actor->id;
+            $task->save();
+            $this->syncAssignees->execute($task, $actor, $attributes['assignee_ids'] ?? []);
+
+            return $task->refresh();
+        });
+    }
+}
