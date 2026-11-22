@@ -14,16 +14,21 @@ class ConversationResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $isProject = $this->type === ConversationType::Project;
-        $other = $isProject ? null : ($this->user_one_id === $request->user()->id ? $this->userTwo : $this->userOne);
+        $isDirect = $this->type === ConversationType::Direct;
+        $other = $isDirect ? ($this->user_one_id === $request->user()->id ? $this->userTwo : $this->userOne) : null;
         $message = $this->lastMessage;
 
         return [
             'id' => $this->id,
             'type' => $this->type->value,
-            'name' => $isProject ? $this->project->name : $other->name,
-            'project_id' => $this->when($isProject, $this->project_id),
-            'user' => $this->when(! $isProject, fn () => new UserSummaryResource($other)),
+            'name' => match ($this->type) {
+                ConversationType::Project => $this->project->name,
+                ConversationType::Team => $this->project->name.' · '.$this->team->name,
+                ConversationType::Direct => $other->name,
+            },
+            'project_id' => $this->when(! $isDirect, $this->project_id),
+            'team' => $this->when($this->type === ConversationType::Team, fn () => new TeamResource($this->team)),
+            'user' => $this->when($isDirect, fn () => new UserSummaryResource($other)),
             'last_message' => $message === null ? null : [
                 'id' => $message->id,
                 'body' => $message->body === null ? null : mb_substr($message->body, 0, 80),

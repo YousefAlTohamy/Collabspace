@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Enums\ProjectRole;
+use App\Models\Conversation;
 use App\Models\Project;
 use App\Models\ProjectMember;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,10 @@ class UpdateProjectMember
             }
 
             $member->refresh()->update($attributes);
+
+            if ($member->wasChanged('team_id') && $member->team_id !== null) {
+                Conversation::ensureTeamChannel($project->id, (int) $member->team_id);
+            }
         });
     }
 }

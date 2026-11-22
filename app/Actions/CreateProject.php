@@ -30,12 +30,16 @@ class CreateProject
             ]);
 
             foreach ($members as $member) {
-                $project->members()->create([
+                $membership = $project->members()->create([
                     'user_id' => $member['user_id'],
                     'role' => $member['role'] ?? ProjectRole::Member,
                     'team_id' => $member['team_id'] ?? null,
                     'job_title' => $member['job_title'] ?? null,
                 ]);
+
+                if ($membership->team_id !== null) {
+                    Conversation::ensureTeamChannel($project->id, (int) $membership->team_id);
+                }
             }
 
             $added = User::query()->whereKey(array_column($members, 'user_id'))->whereKeyNot($actor->id)->get();

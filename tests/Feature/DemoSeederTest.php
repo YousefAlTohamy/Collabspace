@@ -35,7 +35,7 @@ class DemoSeederTest extends TestCase
         foreach ($projects as $project) {
             $members = $project->members->keyBy('user_id');
             $this->assertSame(ProjectRole::Leader, $members->get($project->created_by)->role);
-            $this->assertSame(1, Conversation::query()->where('project_id', $project->id)->count());
+            $this->assertSame(1, Conversation::query()->where('project_id', $project->id)->where('type', 'project')->count());
             foreach ($project->tasks as $task) {
                 foreach ($task->assignees as $assignee) {
                     $this->assertTrue($members->has($assignee->id));

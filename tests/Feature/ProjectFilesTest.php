@@ -306,7 +306,7 @@ class ProjectFilesTest extends TestCase
     public function test_project_delete_succeeds_when_private_storage_cleanup_fails(): void
     {
         $projectId = $this->project->id;
-        $channelId = Conversation::query()->where('project_id', $projectId)->sole()->id;
+        $channelId = Conversation::query()->where('project_id', $projectId)->where('type', 'project')->sole()->id;
         $disk = Storage::fake('local');
         Storage::shouldReceive('disk')->with('local')->andReturn(\Mockery::mock($disk, function ($mock) use ($projectId, $channelId): void {
             $mock->shouldReceive('deleteDirectory')->once()->with("projects/{$projectId}")

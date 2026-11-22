@@ -23,7 +23,7 @@ class ChatAttachmentsTest extends TestCase
         parent::setUp();
         Storage::fake('local');
         $project = Project::factory()->create();
-        $this->channel = Conversation::query()->where('project_id', $project->id)->sole();
+        $this->channel = Conversation::query()->where('project_id', $project->id)->where('type', 'project')->sole();
         $this->actingAs($project->creator, 'sanctum');
     }
 
