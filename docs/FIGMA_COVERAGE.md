@@ -71,7 +71,7 @@ Members see and change what belongs to their projects; leaders manage the projec
 |---|---|---|
 | Inbox (direct messages) | `GET /conversations`, `POST /conversations/direct` | ✅ only between users who share a project |
 | Project chats (public channel) | one channel per project in `GET /conversations` | ✅ members only |
-| Team channels (Frontend, Backend…) | — | ❌ one channel per project in v1 |
+| Team channels (Frontend, Backend…) | `type: team` entries in `GET /conversations` | ✅ one channel per team in each project, open to the members of that team |
 | Messages, attachments | `GET/POST /conversations/{conversation}/messages`, `GET /messages/{message}/attachment` | ✅ same upload rules as project files |
 | Threads (#Screen edit), voice/video call icons, search in chat | — | ❌ out of scope; no realtime in v1 (clients poll with cursor pagination) |
 

@@ -22,7 +22,8 @@ erDiagram
     TASKS |o--o{ FILES : "attached to"
     USERS ||--o{ FILES : "uploads"
 
-    PROJECTS |o--o| CONVERSATIONS : "has one channel"
+    PROJECTS |o--o{ CONVERSATIONS : "has a channel and one per team"
+    TEAMS |o--o{ CONVERSATIONS : "team channel"
     USERS |o--o{ CONVERSATIONS : "direct chat (two users)"
     CONVERSATIONS ||--o{ MESSAGES : "contains"
     USERS ||--o{ MESSAGES : "sends"
@@ -104,8 +105,9 @@ erDiagram
     }
     CONVERSATIONS {
         bigint id PK
-        string type "project or direct"
+        string type "project, team or direct"
         bigint project_id FK
+        bigint team_id FK
         bigint user_one_id FK
         bigint user_two_id FK
     }
@@ -169,7 +171,7 @@ erDiagram
 | A user appears once per project | `unique(project_id, user_id)` on `project_members` |
 | A project always has a leader (R1) | `AddProjectMember` / `UpdateProjectMember` / `RemoveProjectMember` guard |
 | Assignees and reviewers belong to the task's project (R3) | request validation + row locks in `LockTaskMembers` |
-| A project has exactly one channel (R8) | `unique(project_id)` on `conversations`, created in `CreateProject` |
+| One project channel and one channel per team in a project (R8) | unique index on `(project_id, IFNULL(team_id, 0))`, channels ensured in `CreateProject` and the member actions |
 | One direct chat per pair of users (R8) | lower user id stored first + `unique(user_one_id, user_two_id)` |
 | A user is invited once to a meeting / assigned once to a task | `unique` pairs on the pivot tables |
 | Stored files are never reachable by path | private disk, random names, authorized download endpoints |
