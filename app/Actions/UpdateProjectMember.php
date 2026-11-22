@@ -7,23 +7,26 @@ namespace App\Actions;
 use App\Enums\ProjectRole;
 use App\Models\Project;
 use App\Models\ProjectMember;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class UpdateProjectMember
 {
     public function execute(Project $project, ProjectMember $member, array $attributes): void
     {
-        $newRole = (string) ($attributes['role'] ?? '');
-        $demotesLastLeader = $newRole === ProjectRole::Member->value
-            && $member->role === ProjectRole::Leader
-            && $project->leaderCount() === 1;
-        if ($demotesLastLeader) {
-            // R1: a project must always keep at least one leader.
-            throw ValidationException::withMessages([
-                'role' => __('A project must always keep at least one leader.'),
-            ]);
-        }
+        DB::transaction(function () use ($project, $member, $attributes): void {
+            $leaderIds = $project->members()->where('role', ProjectRole::Leader->value)
+                ->orderBy('id')->lockForUpdate()->pluck('id');
 
-        $member->update($attributes);
+            // R1: a project must always keep at least one leader.
+            if (($attributes['role'] ?? null) === ProjectRole::Member->value
+                && $leaderIds->count() === 1 && $leaderIds->contains($member->id)) {
+                throw ValidationException::withMessages([
+                    'role' => __('A project must always keep at least one leader.'),
+                ]);
+            }
+
+            $member->refresh()->update($attributes);
+        });
     }
 }

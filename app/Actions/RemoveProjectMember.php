@@ -14,14 +14,17 @@ class RemoveProjectMember
 {
     public function execute(Project $project, ProjectMember $member): void
     {
-        if ($member->role === ProjectRole::Leader && $project->leaderCount() === 1) {
-            // R1: a project must always keep at least one leader.
-            throw ValidationException::withMessages([
-                'role' => __('A project must always keep at least one leader.'),
-            ]);
-        }
-
         DB::transaction(function () use ($project, $member): void {
+            $leaderIds = $project->members()->where('role', ProjectRole::Leader->value)
+                ->orderBy('id')->lockForUpdate()->pluck('id');
+
+            // R1: a project must always keep at least one leader.
+            if ($leaderIds->count() === 1 && $leaderIds->contains($member->id)) {
+                throw ValidationException::withMessages([
+                    'role' => __('A project must always keep at least one leader.'),
+                ]);
+            }
+
             $userId = $member->user_id;
             $member->delete();
 
