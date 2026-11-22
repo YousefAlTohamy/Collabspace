@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Actions\ChangeTaskStatus;
+use App\Actions\CreateTask;
+use App\Actions\UpdateTask;
 use App\Enums\TaskStatus;
 use App\Http\Requests\ChangeTaskStatusRequest;
 use App\Http\Requests\ListTasksRequest;
@@ -12,10 +14,7 @@ use App\Http\Requests\StoreTaskRequest;
 use App\Http\Requests\UpdateTaskRequest;
 use App\Http\Resources\TaskResource;
 use App\Models\Project;
-use App\Models\ProjectMember;
 use App\Models\Task;
-use App\Models\User;
-use App\Notifications\TaskAssigned;
 use App\Support\Like;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Database\Eloquent\Builder;
@@ -23,9 +22,6 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Notification;
-use Illuminate\Validation\ValidationException;
 
 class TaskController extends Controller
 {
@@ -65,19 +61,9 @@ class TaskController extends Controller
     /**
      * @throws AuthorizationException
      */
-    public function store(StoreTaskRequest $request, Project $project): JsonResponse
+    public function store(StoreTaskRequest $request, Project $project, CreateTask $action): JsonResponse
     {
-        $task = DB::transaction(function () use ($request, $project): Task {
-            $this->lockTaskMembers($project->id, $request);
-            $task = new Task($request->safe()->except('assignee_ids'));
-            $task->project_id = $project->id;
-            $task->created_by = $request->user()->id;
-            $task->save();
-            $changes = $task->assignees()->sync($request->validated('assignee_ids') ?? []);
-            $this->notifyAssigned($task, $request->user(), $changes['attached']);
-
-            return $task->refresh();
-        });
+        $task = $action->execute($request->user(), $project, $request->validated());
 
         return (new TaskResource($task->load(['reviewer', 'assignees'])->loadCount('comments')))
             ->response()
@@ -97,20 +83,9 @@ class TaskController extends Controller
     /**
      * @throws AuthorizationException
      */
-    public function update(UpdateTaskRequest $request, Task $task): TaskResource
+    public function update(UpdateTaskRequest $request, Task $task, UpdateTask $action): TaskResource
     {
-        $task = DB::transaction(function () use ($request, $task): Task {
-            $this->lockTaskMembers($task->project_id, $request);
-            $task = Task::query()->lockForUpdate()->findOrFail($task->id);
-            $task->update($request->safe()->except('assignee_ids'));
-
-            if ($request->safe()->has('assignee_ids')) {
-                $changes = $task->assignees()->sync($request->validated('assignee_ids'));
-                $this->notifyAssigned($task, $request->user(), $changes['attached']);
-            }
-
-            return $task;
-        });
+        $task = $action->execute($request->user(), $task, $request->validated());
 
         return new TaskResource($task->load(['reviewer', 'assignees'])->loadCount('comments'));
     }
@@ -140,41 +115,6 @@ class TaskController extends Controller
         $task = $action->execute($request->user(), $task, $to, $progress === null ? null : (int) $progress);
 
         return new TaskResource($task->load(['reviewer', 'assignees'])->loadCount('comments'));
-    }
-
-    /** @param list<int> $attached */
-    private function notifyAssigned(Task $task, User $actor, array $attached): void
-    {
-        $assignees = User::query()->whereKey($attached)->whereKeyNot($actor->id)->get();
-        Notification::send($assignees, new TaskAssigned($task->id, $task->project_id, $actor));
-    }
-
-    private function lockTaskMembers(int $projectId, StoreTaskRequest|UpdateTaskRequest $request): void
-    {
-        $memberFields = [];
-        foreach ($request->validated('assignee_ids') ?? [] as $index => $userId) {
-            $memberFields["assignee_ids.{$index}"] = (int) $userId;
-        }
-        if (($reviewerId = $request->validated('reviewer_id')) !== null) {
-            $memberFields['reviewer_id'] = (int) $reviewerId;
-        }
-        if ($memberFields === []) {
-            return;
-        }
-
-        // R3: serialize assignment writes with removal of those project members.
-        $members = ProjectMember::query()
-            ->where('project_id', $projectId)
-            ->whereIn('user_id', $memberFields)
-            ->orderBy('user_id')
-            ->lockForUpdate()
-            ->pluck('user_id')
-            ->all();
-
-        $missingFields = array_keys(array_diff($memberFields, $members));
-        if ($missingFields !== []) {
-            throw ValidationException::withMessages(array_fill_keys($missingFields, __('The selected user must belong to the project.')));
-        }
     }
 
     /**

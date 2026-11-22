@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\StoreProjectFile;
 use App\Http\Requests\ListFilesRequest;
 use App\Http\Requests\StoreFileRequest;
 use App\Http\Resources\FileResource;
 use App\Models\Project;
 use App\Models\ProjectFile;
 use App\Support\Like;
-use App\Support\UploadRules;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -19,7 +19,6 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use Throwable;
 
 class ProjectFileController extends Controller
 {
@@ -60,28 +59,9 @@ class ProjectFileController extends Controller
      *
      * @throws AuthorizationException
      */
-    public function store(StoreFileRequest $request, Project $project): JsonResponse
+    public function store(StoreFileRequest $request, Project $project, StoreProjectFile $action): JsonResponse
     {
-        $uploaded = $request->validated('file');
-
-        $file = new ProjectFile([
-            'task_id' => $request->validated('task_id'),
-            'original_name' => UploadRules::sanitizeName($uploaded->getClientOriginalName()),
-            'mime_type' => (string) $uploaded->getMimeType(),
-            'size' => (int) $uploaded->getSize(),
-        ]);
-        $file->project_id = $project->id;
-        $file->uploaded_by = $request->user()->id;
-        $file->path = $uploaded->store("projects/{$project->id}", 'local');
-        abort_if($file->path === false, 500);
-
-        try {
-            $file->save();
-        } catch (Throwable $exception) {
-            Storage::disk('local')->delete($file->path);
-
-            throw $exception;
-        }
+        $file = $action->execute($request->user(), $project, $request->validated('file'), $request->validated('task_id'));
 
         return (new FileResource($file->load('uploader')))
             ->response()

@@ -4,19 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\SaveMeeting;
 use App\Http\Requests\ListMeetingsRequest;
 use App\Http\Requests\StoreMeetingRequest;
 use App\Http\Resources\MeetingResource;
 use App\Models\Meeting;
-use App\Models\User;
-use App\Notifications\MeetingInvitation;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Notification;
 
 class MeetingController extends Controller
 {
@@ -43,15 +40,15 @@ class MeetingController extends Controller
         return MeetingResource::collection($meetings)->preserveQuery();
     }
 
-    public function store(StoreMeetingRequest $request): JsonResponse
+    public function store(StoreMeetingRequest $request, SaveMeeting $action): JsonResponse
     {
-        $meeting = DB::transaction(function () use ($request): Meeting {
-            $meeting = new Meeting;
-            $meeting->created_by = $request->user()->id;
-            $this->saveMeeting($meeting, $request);
-
-            return $meeting;
-        });
+        $meeting = $action->execute(
+            $request->user(),
+            new Meeting,
+            $request->safe()->except(['participant_ids', 'starts_at']),
+            $request->startsAt(),
+            $request->validated('participant_ids'),
+        );
 
         return (new MeetingResource($meeting->load(self::RELATIONS)))->response()->setStatusCode(201);
     }
@@ -63,14 +60,15 @@ class MeetingController extends Controller
         return new MeetingResource($meeting->load(self::RELATIONS));
     }
 
-    public function update(StoreMeetingRequest $request, Meeting $meeting): MeetingResource
+    public function update(StoreMeetingRequest $request, Meeting $meeting, SaveMeeting $action): MeetingResource
     {
-        $meeting = DB::transaction(function () use ($request, $meeting): Meeting {
-            $locked = Meeting::query()->lockForUpdate()->findOrFail($meeting->id);
-            $this->saveMeeting($locked, $request);
-
-            return $locked;
-        });
+        $meeting = $action->execute(
+            $request->user(),
+            $meeting,
+            $request->safe()->except(['participant_ids', 'starts_at']),
+            $request->startsAt(),
+            $request->validated('participant_ids'),
+        );
 
         return new MeetingResource($meeting->load(self::RELATIONS));
     }
@@ -81,20 +79,5 @@ class MeetingController extends Controller
         $meeting->delete();
 
         return response()->json(['message' => __('Meeting deleted.')]);
-    }
-
-    private function saveMeeting(Meeting $meeting, StoreMeetingRequest $request): void
-    {
-        $creating = ! $meeting->exists;
-        $meeting->fill($request->safe()->except(['participant_ids', 'starts_at']));
-        $meeting->starts_at = $request->startsAt();
-        $meeting->save();
-
-        if ($creating || $request->safe()->has('participant_ids')) {
-            $actor = $request->user();
-            $changes = $meeting->participants()->sync([$actor->id, ...$request->validated('participant_ids', [])]);
-            $invited = User::query()->whereKey($changes['attached'])->whereKeyNot($actor->id)->get();
-            Notification::send($invited, new MeetingInvitation($meeting->id, $meeting->project_id, $actor));
-        }
     }
 }

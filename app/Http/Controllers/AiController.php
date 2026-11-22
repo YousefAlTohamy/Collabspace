@@ -4,22 +4,17 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Enums\AiRole;
+use App\Actions\SendAiMessage;
 use App\Http\Requests\ListAiMessagesRequest;
 use App\Http\Requests\StoreAiMessageRequest;
 use App\Http\Resources\AiMessageResource;
 use App\Models\AiMessage;
-use App\Models\User;
-use App\Services\AiClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\DB;
 
 class AiController extends Controller
 {
-    private const SYSTEM_PROMPT = 'You are the Collabspace assistant. Give concise answers. You have no access to user projects or data.';
-
     public function index(ListAiMessagesRequest $request): AnonymousResourceCollection
     {
         $messages = AiMessage::query()->where('user_id', $request->user()->id)->latest('id')
@@ -28,33 +23,14 @@ class AiController extends Controller
         return AiMessageResource::collection($messages)->preserveQuery();
     }
 
-    public function store(StoreAiMessageRequest $request, AiClient $ai): JsonResponse
+    public function store(StoreAiMessageRequest $request, SendAiMessage $action): JsonResponse
     {
-        $userId = $request->user()->id;
-        $content = $request->validated('content');
-        $answer = $ai->chat([
-            ['role' => 'system', 'content' => self::SYSTEM_PROMPT],
-            ...$this->boundedHistory($userId),
-            ['role' => AiRole::User->value, 'content' => $content],
-        ]);
+        $messages = $action->execute($request->user()->id, $request->validated('content'));
 
-        $messages = DB::transaction(function () use ($userId, $content, $answer): array {
-            // Serialize the insert of each pair for a single user's history.
-            User::query()->lockForUpdate()->findOrFail($userId);
-            $userMessage = new AiMessage(['role' => AiRole::User, 'content' => $content]);
-            $userMessage->user_id = $userId;
-            $userMessage->save();
-
-            // MySQL TEXT also limits the byte length of UTF-8 replies.
-            $reply = mb_strcut(mb_substr($answer, 0, 20000), 0, 65535);
-            $assistantMessage = new AiMessage(['role' => AiRole::Assistant, 'content' => $reply]);
-            $assistantMessage->user_id = $userId;
-            $assistantMessage->save();
-
-            return ['user_message' => new AiMessageResource($userMessage), 'assistant_message' => new AiMessageResource($assistantMessage)];
-        });
-
-        return response()->json(['data' => $messages], 201);
+        return response()->json(['data' => [
+            'user_message' => new AiMessageResource($messages['user_message']),
+            'assistant_message' => new AiMessageResource($messages['assistant_message']),
+        ]], 201);
     }
 
     public function destroy(Request $request): JsonResponse
@@ -62,26 +38,5 @@ class AiController extends Controller
         AiMessage::query()->where('user_id', $request->user()->id)->delete();
 
         return response()->json(['message' => __('AI history cleared.')]);
-    }
-
-    /** @return list<array{role: string, content: string}> */
-    private function boundedHistory(int $userId): array
-    {
-        $messages = AiMessage::query()->where('user_id', $userId)->latest('id')->limit(20)->get();
-        $remaining = 12000;
-        $history = [];
-
-        foreach ($messages as $message) {
-            $content = mb_substr($message->content, 0, 2000);
-            $length = mb_strlen($content);
-            if ($length > $remaining) {
-                break;
-            }
-
-            $history[] = ['role' => $message->role->value, 'content' => $content];
-            $remaining -= $length;
-        }
-
-        return array_reverse($history);
     }
 }

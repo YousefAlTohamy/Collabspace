@@ -191,7 +191,7 @@ Stage tag in brackets = the stage that implements it.
 - **Errors**: 401 unauthenticated, 403 forbidden, 404 not found, 422 `{message, errors}`, 429 throttled, 503 AI unavailable.
   Always JSON for `/api/*`. No stack traces when `APP_DEBUG=false`.
 - **Rate limits**: login 5/min per email+IP; register 5/min per IP; forgot/reset password 3/min per IP;
-  general API 60/min per user; AI 20/min per user; file upload 20/min per user.
+  general API 120/min per user; AI 20/min per user; file upload 20/min per user.
 - **Tokens**: Sanctum; `remember=false` → expires in 1 day, `remember=true` → 30 days; password change/reset revokes other/all tokens.
 - **Dates**: ISO 8601 UTC. **Files**: private disk; avatars on the public disk with random names.
 - **Naming**: snake_case JSON keys, plural resource routes, enums as lowercase strings.
