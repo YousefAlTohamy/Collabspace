@@ -86,7 +86,7 @@ Download only via authorized endpoint (R2). Deleting a project removes its store
 - **Summary**: text field on the meeting. The organizer can generate it from the transcript via the AI service (needs at least one transcript entry, else 422).
 
 **R10 Notifications** (Laravel database notifications): created when a user is (a) added to a project, (b) assigned to a task,
-(c) invited to a meeting. Never notify the actor about their own action. A user only reads/marks their own.
+(c) invited to a meeting, and by a scheduled command when (d) a meeting starts within 30 minutes (once per meeting, to its participants who still have access to the project) or (e) a task is overdue (once per overdue episode, to its assignees; the flag is cleared when the due date moves to the future or the task is completed). Never notify the actor about their own action. A user only reads/marks their own.
 
 **R11 Reports** (scope = projects the user is a member of; optional `project_id` must be one of them; `period` = `week|month|three_months|year`, default `year`):
 - `task_completion_rate` = completed tasks / all tasks in scope, in %.
@@ -123,13 +123,13 @@ Enums are lowercase snake strings.
 - **teams**: name — seeded: UI/UX, Frontend, Backend, Marketing.
 - **projects**: name, description?, type? (free text e.g. "SaaS"), priority (`low|medium|high`), status (`active|done`, default `active`), start_date, end_date, created_by (user), completed_at? (set when status becomes `done`, cleared when it goes back to `active`).
 - **project_members**: project_id, user_id, role (`leader|member`), team_id?, job_title? — unique(project_id, user_id).
-- **tasks**: project_id, title, description?, status, priority, progress (0..100, default 0), start_date?, due_date?, reviewer_id?, created_by, completed_at?
+- **tasks**: project_id, title, description?, status, priority, progress (0..100, default 0), start_date?, due_date?, reviewer_id?, created_by, completed_at?, overdue_notified_at?
 - **task_assignees**: task_id, user_id — unique pair.
 - **task_comments**: task_id, user_id, body (max 2000).
 - **files**: project_id, task_id?, uploaded_by, original_name, path, mime_type, size.
 - **conversations**: type (`project|direct`), project_id? (unique when type=project), user_one_id?/user_two_id? (direct, stored as lower id first, unique pair).
 - **messages**: conversation_id, user_id, body?, attachment_path?, attachment_name?, attachment_mime?, attachment_size?
-- **meetings**: project_id?, created_by, title, starts_at, duration_minutes, meeting_url?, note?, summary?
+- **meetings**: project_id?, created_by, title, starts_at, duration_minutes, meeting_url?, note?, summary?, reminder_sent_at?
 - **meeting_participants**: meeting_id, user_id — unique pair.
 - **meeting_transcripts**: meeting_id, speaker_id?, offset_seconds, text.
 - **notifications**: Laravel default table.
