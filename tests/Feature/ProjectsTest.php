@@ -65,7 +65,8 @@ class ProjectsTest extends TestCase
             ->assertJsonCount(4, 'data.0.members');
 
         $this->assertSame(
-            ['id', 'name', 'description', 'type', 'priority', 'status', 'start_date', 'end_date', 'members_count', 'members'],
+            ['id', 'name', 'description', 'type', 'priority', 'status', 'start_date', 'end_date',
+                'members_count', 'files_count', 'progress_percent', 'members'],
             array_keys($response->json('data.0')),
         );
 

@@ -21,6 +21,10 @@ class ProjectResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // R5: progress is computed from withCount, never stored.
+        $total = (int) ($this->tasks_count ?? 0);
+        $completed = (int) ($this->tasks_completed_count ?? 0);
+
         return [
             'id' => $this->id,
             'name' => $this->name,
@@ -31,6 +35,8 @@ class ProjectResource extends JsonResource
             'start_date' => $this->start_date?->toDateString(),
             'end_date' => $this->end_date?->toDateString(),
             'members_count' => $this->whenCounted('members'),
+            'files_count' => $this->whenCounted('files'),
+            'progress_percent' => $total > 0 ? (int) round($completed / $total * 100) : 0,
             'members' => $this->whenLoaded('members', fn () => ProjectMemberResource::collection($this->members->take(4))),
         ];
     }

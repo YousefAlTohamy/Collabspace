@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\ProjectTeamsOverview;
 use App\Enums\ProjectRole;
+use App\Enums\TaskStatus;
 use App\Http\Requests\ListProjectsRequest;
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
 use App\Http\Resources\ProjectDetailResource;
 use App\Http\Resources\ProjectResource;
+use App\Http\Resources\ProjectTeamsResource;
 use App\Models\Project;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Database\Eloquent\Builder;
@@ -18,6 +21,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ProjectController extends Controller
 {
@@ -29,7 +33,7 @@ class ProjectController extends Controller
             // R2: lists never include projects the user is not a member of.
             ->whereHas('members', fn (Builder $members) => $members->where('user_id', $request->user()->id))
             ->with(['members.user', 'members.team'])
-            ->withCount('members');
+            ->withCount(['members', 'files', 'tasks', 'tasks as tasks_completed_count' => fn (Builder $tasks) => $tasks->where('status', TaskStatus::Completed->value)]);
 
         if ($search = $request->validated('search')) {
             $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
@@ -91,13 +95,8 @@ class ProjectController extends Controller
         return $this->detailResponse($project);
     }
 
-    /**
-     * @throws AuthorizationException
-     */
     public function update(UpdateProjectRequest $request, Project $project): ProjectDetailResource
     {
-        $this->authorize('update', $project);
-
         $project->update($request->validated());
 
         return $this->detailResponse($project);
@@ -112,13 +111,36 @@ class ProjectController extends Controller
 
         DB::transaction(fn () => $project->delete());
 
+        // R7: once the rows are gone, the stored files have no owner anymore.
+        abort_unless(Storage::disk('local')->deleteDirectory('projects/'.$project->id), 500);
+
         return response()->json(['message' => __('Project deleted.')]);
+    }
+
+    /**
+     * Teams tab: members grouped by team with per-member and per-team task
+     * progress (aggregates only, see ProjectTeamsOverview).
+     *
+     * @throws AuthorizationException
+     */
+    public function teams(Request $request, Project $project, ProjectTeamsOverview $overview): ProjectTeamsResource
+    {
+        $this->authorize('view', $project); // R2
+
+        return new ProjectTeamsResource($overview->execute($project));
     }
 
     private function detailResponse(Project $project): ProjectDetailResource
     {
         $project->loadCount('members')->load(['members.user', 'members.team']);
 
-        return new ProjectDetailResource($project);
+        // R5: one grouped query for the tasks-by-status breakdown.
+        $taskCounts = $project->tasks()
+            ->selectRaw('status, count(*) as n')
+            ->groupBy('status')
+            ->pluck('n', 'status')
+            ->all();
+
+        return new ProjectDetailResource($project, $taskCounts);
     }
 }

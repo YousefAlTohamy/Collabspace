@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\TaskStatus;
 use App\Http\Requests\UpdateAvatarRequest;
 use App\Http\Requests\UpdatePasswordRequest;
 use App\Http\Requests\UpdateProfileRequest;
@@ -58,5 +59,14 @@ class ProfileController extends Controller
             ->delete();
 
         return response()->json(['message' => __('Password updated.')]);
+    }
+
+    public function stats(Request $request): JsonResponse
+    {
+        $completed = $request->user()->assignedTasks()
+            ->where('status', TaskStatus::Completed->value)
+            ->count();
+
+        return response()->json(['data' => ['completed_tasks' => $completed]]);
     }
 }
