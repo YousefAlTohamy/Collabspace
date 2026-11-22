@@ -92,7 +92,7 @@ Download only via authorized endpoint (R2). Deleting a project removes its store
 - `task_completion_rate` = completed tasks / all tasks in scope, in %.
 - `projects_completion_rate` = projects with status `done` / all projects in scope, in %.
 - `teams_activity_rate` = members who completed a task or wrote a comment in the period / all members in scope, in %.
-- `tasks_vs_deadline` (per month): % of tasks completed in that month that were completed on or before `due_date`.
+- `tasks_vs_deadline` (per month): % of tasks completed in that month **that have a `due_date`** that were completed on or before it. Completed tasks without a `due_date` are excluded from both numerator and denominator; the month value is `null` when no such task exists.
 - `projects_progress` (per month): cumulative completed tasks / all tasks created up to that month end, in %.
 - `worker_activity` (per month): number of tasks completed in that month.
 - Period windows end now: `week` = 7 days, `month` = 30, `three_months` = 90, `year` = 365 (UTC). The previous period is the same length right before.
