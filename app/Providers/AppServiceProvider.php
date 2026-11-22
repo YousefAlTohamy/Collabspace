@@ -52,6 +52,8 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(20)->by($request->user()?->id ?: $request->ip()),
         ]);
 
+        RateLimiter::for('ai', fn (Request $request) => Limit::perMinute(20)->by($request->user()->id));
+
         // Password reset links must open the SPA, not the API.
         ResetPassword::createUrlUsing(function (User $user, string $token): string {
             return config('app.frontend_url').'/reset-password?token='.$token.'&email='.urlencode($user->email);

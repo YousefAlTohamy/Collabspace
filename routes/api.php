@@ -1,8 +1,11 @@
 <?php
 
+use App\Http\Controllers\AiController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\MeetingSummaryController;
 use App\Http\Controllers\MeetingTranscriptController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\NotificationController;
@@ -10,6 +13,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectFileController;
 use App\Http\Controllers\ProjectMemberController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\TaskCommentController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TeamController;
@@ -97,5 +102,19 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/notifications', [NotificationController::class, 'index']);
         Route::post('/notifications/read-all', [NotificationController::class, 'readAll']);
         Route::post('/notifications/{id}/read', [NotificationController::class, 'read'])->whereUuid('id');
+
+        Route::get('/dashboard', DashboardController::class);
+        Route::get('/reports/overview', [ReportController::class, 'overview']);
+        Route::get('/reports', [ReportController::class, 'index']);
+        Route::post('/reports', [ReportController::class, 'store']);
+        Route::get('/reports/{report}', [ReportController::class, 'show'])->whereNumber('report');
+        Route::get('/search', SearchController::class);
+
+        Route::middleware('throttle:ai')->group(function (): void {
+            Route::get('/ai/messages', [AiController::class, 'index']);
+            Route::post('/ai/messages', [AiController::class, 'store']);
+            Route::delete('/ai/messages', [AiController::class, 'destroy']);
+            Route::post('/meetings/{meeting}/summary/generate', MeetingSummaryController::class)->whereNumber('meeting');
+        });
     });
 });

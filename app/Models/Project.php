@@ -32,6 +32,7 @@ class Project extends Model
             'status' => ProjectStatus::class,
             'start_date' => 'date',
             'end_date' => 'date',
+            'completed_at' => 'datetime',
         ];
     }
 
