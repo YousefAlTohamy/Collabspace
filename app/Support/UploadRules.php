@@ -33,6 +33,14 @@ class UploadRules
         'txt' => ['text/plain'],
     ];
 
+    public static function sanitizeName(string $name): string
+    {
+        $name = basename(str_replace('\\', '/', $name));
+        $name = preg_replace('/[\x00-\x1F\x7F]/', '', $name) ?? '';
+
+        return mb_substr(trim($name), 0, 255) ?: 'download';
+    }
+
     /** @return list<string|File|Closure> */
     public static function rules(): array
     {

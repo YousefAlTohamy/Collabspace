@@ -9,6 +9,7 @@ use App\Http\Requests\StoreMessageRequest;
 use App\Http\Resources\MessageResource;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Support\UploadRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
@@ -33,7 +34,7 @@ class MessageController extends Controller
         $disk = Storage::disk('local');
 
         if ($attachment = $request->validated('attachment')) {
-            $message->attachment_name = mb_substr(preg_replace('/[\x00-\x1F\x7F]/', '', $attachment->getClientOriginalName()), 0, 255) ?: 'attachment';
+            $message->attachment_name = UploadRules::sanitizeName($attachment->getClientOriginalName());
             $message->attachment_mime = $attachment->getMimeType();
             $message->attachment_size = $attachment->getSize();
             $message->attachment_path = $attachment->store("chat/{$conversation->id}", 'local');

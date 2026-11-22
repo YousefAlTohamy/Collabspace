@@ -119,10 +119,19 @@ class ProjectController extends Controller
     {
         $this->authorize('delete', $project);
 
-        DB::transaction(fn () => $project->delete());
+        $channelId = DB::transaction(function () use ($project): ?int {
+            $channelId = Conversation::query()->where('project_id', $project->id)->value('id');
+
+            abort_unless($project->delete(), 500);
+
+            return $channelId;
+        });
 
         // R7: once the rows are gone, the stored files have no owner anymore.
-        abort_unless(Storage::disk('local')->deleteDirectory('projects/'.$project->id), 500);
+        $disk = Storage::disk('local');
+        $projectFilesRemoved = $disk->deleteDirectory('projects/'.$project->id);
+        $chatFilesRemoved = $channelId === null || $disk->deleteDirectory('chat/'.$channelId);
+        abort_unless($projectFilesRemoved && $chatFilesRemoved, 500);
 
         return response()->json(['message' => __('Project deleted.')]);
     }

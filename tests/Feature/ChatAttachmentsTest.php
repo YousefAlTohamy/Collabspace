@@ -76,6 +76,41 @@ class ChatAttachmentsTest extends TestCase
         $this->getJson($download)->assertNotFound();
     }
 
+    public function test_deleting_the_project_removes_its_chat_attachment_directory(): void
+    {
+        $channelId = $this->channel->id;
+        $projectId = $this->channel->project_id;
+        $this->postJson("/api/v1/conversations/{$channelId}/messages", [
+            'attachment' => UploadedFile::fake()->create('report.pdf'),
+        ])->assertCreated();
+
+        $disk = Storage::disk('local');
+        $directory = $disk->path('chat/'.$channelId);
+        $this->assertDirectoryExists($directory);
+
+        $this->deleteJson("/api/v1/projects/{$projectId}")->assertOk();
+
+        $this->assertDatabaseMissing('conversations', ['id' => $channelId]);
+        $this->assertDirectoryDoesNotExist($directory);
+    }
+
+    public function test_project_and_chat_uploads_store_only_the_display_basename(): void
+    {
+        $name = '../../evil.pdf';
+        $projectId = $this->channel->project_id;
+        $channelId = $this->channel->id;
+
+        $file = $this->postJson("/api/v1/projects/{$projectId}/files", [
+            'file' => UploadedFile::fake()->create($name),
+        ])->assertCreated()->assertJsonPath('data.name', 'evil.pdf');
+        $message = $this->postJson("/api/v1/conversations/{$channelId}/messages", [
+            'attachment' => UploadedFile::fake()->create($name),
+        ])->assertCreated()->assertJsonPath('data.attachment.name', 'evil.pdf');
+
+        $this->assertDatabaseHas('files', ['id' => $file->json('data.id'), 'original_name' => 'evil.pdf']);
+        $this->assertDatabaseHas('messages', ['id' => $message->json('data.id'), 'attachment_name' => 'evil.pdf']);
+    }
+
     public function test_attachment_limiter_preserves_the_text_message_rate(): void
     {
         $uri = "/api/v1/conversations/{$this->channel->id}/messages";

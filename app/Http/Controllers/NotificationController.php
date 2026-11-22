@@ -17,7 +17,12 @@ class NotificationController extends Controller
         $user = $request->user();
         $perPage = (int) ($request->validated('per_page') ?? 15);
 
-        return NotificationResource::collection($user->notifications()->orderByDesc('id')->paginate($perPage))
+        $notifications = $user->notifications()
+            ->reorder('created_at', 'desc')
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        return NotificationResource::collection($notifications)
             ->additional(['unread_count' => $user->notifications()->whereNull('read_at')->count()]);
     }
 

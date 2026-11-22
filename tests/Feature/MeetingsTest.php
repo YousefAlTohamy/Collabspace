@@ -48,6 +48,24 @@ class MeetingsTest extends TestCase
         $this->getJson('/api/v1/meetings')->assertOk()->assertJsonCount(0, 'data');
     }
 
+    public function test_removed_organizer_cannot_update_or_delete_a_project_meeting(): void
+    {
+        $project = Project::factory()->create();
+        $organizer = $this->member($project);
+        $id = $this->actingAs($organizer, 'sanctum')
+            ->postJson('/api/v1/meetings', $this->payload() + ['project_id' => $project->id])
+            ->assertCreated()->json('data.id');
+
+        $this->actingAs($project->creator, 'sanctum')
+            ->deleteJson("/api/v1/projects/{$project->id}/members/{$organizer->id}")->assertOk();
+
+        $uri = "/api/v1/meetings/{$id}";
+        $this->actingAs($organizer, 'sanctum')
+            ->putJson($uri, $this->payload() + ['project_id' => null])->assertForbidden();
+        $this->deleteJson($uri)->assertForbidden();
+        $this->assertDatabaseHas('meetings', ['id' => $id, 'project_id' => $project->id]);
+    }
+
     public function test_meeting_validation_and_project_participant_rules(): void
     {
         $project = Project::factory()->create();

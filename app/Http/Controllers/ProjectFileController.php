@@ -9,6 +9,7 @@ use App\Http\Requests\StoreFileRequest;
 use App\Http\Resources\FileResource;
 use App\Models\Project;
 use App\Models\ProjectFile;
+use App\Support\UploadRules;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -66,7 +67,7 @@ class ProjectFileController extends Controller
 
         $file = new ProjectFile([
             'task_id' => $request->validated('task_id'),
-            'original_name' => $this->sanitizeName($uploaded->getClientOriginalName()),
+            'original_name' => UploadRules::sanitizeName($uploaded->getClientOriginalName()),
             'mime_type' => (string) $uploaded->getMimeType(),
             'size' => (int) $uploaded->getSize(),
         ]);
@@ -131,16 +132,5 @@ class ProjectFileController extends Controller
         }
 
         return $query;
-    }
-
-    /**
-     * Basename only, no control characters, max 255 chars.
-     */
-    private function sanitizeName(string $name): string
-    {
-        $name = basename(str_replace('\\', '/', $name));
-        $name = preg_replace('/[\x00-\x1F\x7F]/', '', $name) ?? '';
-
-        return mb_substr(trim($name), 0, 255) ?: 'download';
     }
 }

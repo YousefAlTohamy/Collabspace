@@ -62,22 +62,38 @@ class NotificationsTest extends TestCase
     public function test_notifications_are_private_and_can_be_marked_read(): void
     {
         [$owner, $other] = User::factory()->count(2)->create()->all();
-        $owner->notify(new AddedToProject(1, $other));
-        $this->travel(1)->seconds();
-        $owner->notify(new AddedToProject(2, $other));
+        $olderId = '00000000-0000-4000-8000-000000000003';
+        $lowerTiedId = '00000000-0000-4000-8000-000000000001';
+        $higherTiedId = '00000000-0000-4000-8000-000000000002';
+        $notification = new AddedToProject(1, $other);
+        foreach ([
+            $lowerTiedId => '2026-11-02 10:00:00',
+            $higherTiedId => '2026-11-02 10:00:00',
+            $olderId => '2026-11-01 10:00:00',
+        ] as $id => $createdAt) {
+            $owner->notifications()->create([
+                'id' => $id,
+                'type' => $notification->databaseType($owner),
+                'data' => $notification->toDatabase($owner),
+                'created_at' => $createdAt,
+            ]);
+        }
+
         $other->notify(new AddedToProject(1, $owner));
-        $mine = $owner->notifications()->firstOrFail();
+        $mine = $owner->notifications()->findOrFail($higherTiedId);
         $foreign = $other->notifications()->firstOrFail();
         $uri = '/api/v1/notifications';
 
         $this->getJson($uri)->assertUnauthorized();
         $this->actingAs($owner, 'sanctum')->getJson($uri.'?per_page=1')->assertOk()->assertJsonCount(1, 'data')
-            ->assertJsonPath('meta.total', 2)->assertJsonPath('unread_count', 2)
+            ->assertJsonPath('meta.total', 3)->assertJsonPath('unread_count', 3)
             ->assertJsonPath('data.0.id', $mine->id)->assertJsonPath('data.0.type', 'project.member_added');
+        $response = $this->getJson($uri)->assertOk();
+        $this->assertSame([$higherTiedId, $lowerTiedId, $olderId], array_column($response->json('data'), 'id'));
         $this->postJson("{$uri}/{$foreign->id}/read")->assertNotFound();
         $this->postJson("{$uri}/{$mine->id}/read")->assertOk();
         $this->assertNotNull($mine->fresh()->read_at);
-        $this->getJson($uri)->assertOk()->assertJsonPath('unread_count', 1);
+        $this->getJson($uri)->assertOk()->assertJsonPath('unread_count', 2);
         $this->postJson($uri.'/read-all')->assertOk();
         $this->getJson($uri)->assertOk()->assertJsonPath('unread_count', 0);
         $this->assertNull($foreign->fresh()->read_at);

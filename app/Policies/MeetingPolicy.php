@@ -11,16 +11,13 @@ class MeetingPolicy
 {
     public function view(User $user, Meeting $meeting): bool
     {
-        if ($meeting->project_id !== null && ! $meeting->project->isMember($user)) {
-            return false;
-        }
-
-        return $this->update($user, $meeting) || $meeting->participants()->whereKey($user->id)->exists();
+        return $this->hasProjectAccess($user, $meeting)
+            && ($meeting->created_by === $user->id || $meeting->participants()->whereKey($user->id)->exists());
     }
 
     public function update(User $user, Meeting $meeting): bool
     {
-        return $meeting->created_by === $user->id;
+        return $meeting->created_by === $user->id && $this->hasProjectAccess($user, $meeting);
     }
 
     public function delete(User $user, Meeting $meeting): bool
@@ -31,5 +28,10 @@ class MeetingPolicy
     public function addTranscript(User $user, Meeting $meeting): bool
     {
         return $this->view($user, $meeting);
+    }
+
+    private function hasProjectAccess(User $user, Meeting $meeting): bool
+    {
+        return $meeting->project_id === null || $meeting->project?->isMember($user) === true;
     }
 }
