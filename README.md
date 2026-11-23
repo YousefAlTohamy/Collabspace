@@ -132,6 +132,8 @@ In the `local` environment, `--seed` also loads **demo data** (see below). In an
 
 Run the scheduler worker with `docker compose exec -u sail laravel.test php artisan schedule:work` to send meeting reminders and overdue task notifications every five minutes. To check for due notifications immediately, run `docker compose exec -u sail laravel.test php artisan notifications:send-reminders`.
 
+In a fresh local demo database, run the command twice as soon as seeding finishes, before starting the worker. The first run sends notifications for overdue tasks and a meeting starting in 20 minutes. The second run should show zero for both counts. Sign in as Mohamed and set **List notifications (saves notificationId)** to **Inherit auth from parent** to see both types of notifications. The collection's full workflow uses the helper account's token for that request.
+
 ### Environment variables
 
 | Variable | Purpose |
@@ -185,11 +187,13 @@ Import [`postman/Collabspace.postman_collection.json`](postman/Collabspace.postm
 
 ### Quick demo from the seeded data
 
-1. Sign in as Mohamed (`mohamed@collabspace.test`) with **Login (saves token)**, then run **Dashboard**. Open **List my projects**, find Alpha's ID and set `projectId`. Run **Project teams tab** and **Reports overview** for the same project.
-2. In **List project tasks**, use `status=in_review` and `search=Report charts`, and disable any `assigned_to_me` or priority filter. Save the ID as `taskId`. On a fresh seed, sign in as Mohanad (`mohanad@collabspace.test`), the assignee. **Change status: completed** returns `403` while a reviewer is assigned. The reviewer, Khalid (`khalid@collabspace.test`), can run the same request and gets `200` with `progress: 100`.
+1. Sign in as Mohamed (`mohamed@collabspace.test`) with **Login (saves token)**, then run **Dashboard**. Open **List my projects**, find Alpha's ID and set `projectId`. Run **Project teams tab** and **Reports overview** for the same project. You can set `period=today` to see activity since midnight UTC.
+2. In **List project tasks**, use `status=in_review` and `search=Report charts`, and disable any `assigned_to_me` or priority filter. To demonstrate the team filter, set `teamId` to Backend's ID from **List teams (saves teamId)** and enable `team_id`. Save the task ID as `taskId`. On a fresh seed, sign in as Mohanad (`mohanad@collabspace.test`), the assignee. **Change status: completed** returns `403` while a reviewer is assigned. The reviewer, Khalid (`khalid@collabspace.test`), can run the same request and gets `200` with `progress: 100`.
 3. As Mohamed, find SepetGo's ID in **List my projects** with the search and status filters off. As Khalid, **Get project** with that ID returns `403` because he's outside SepetGo.
 
 The Quick demo uses password sign-in and works with the seeded database alone.
+
+Enable `uploaded_by_me=1` in **List all my files** or **List project files** to see your own uploads in projects you can access.
 
 ## Endpoint overview
 
@@ -213,5 +217,6 @@ All 64 API routes live under `/api/v1`. Only `auth/register`, `auth/login`, `aut
 
 - **Chat** uses REST with cursor pagination, so the client polls for new messages. The API supports project, team and direct conversations.
 - **Meetings** store an HTTPS link for an external service such as Meet or Zoom. The calendar accepts a date range. Meeting summaries send transcript text to the configured AI provider.
+- **Reports** offer `today`, `week`, `month`, `three_months`, and `year`. Today compares the elapsed part of the UTC day with the same hours yesterday. The chart keeps its month label and project progress is cumulative.
 - **Profile email** is read-only. New Google accounts receive a random password and can set a password through the reset flow. Google linking requires a Gmail address or a Workspace `hd` claim. Linking an existing account with an unverified email replaces its password and revokes its old tokens. A verified account keeps its credentials.
 - **v1 scope** keeps task views to Kanban data and omits chat threads and calls, file versioning, daily status updates, and other features listed in [SPEC §7](docs/SPEC.md#7-out-of-scope-for-v1-do-not-build).

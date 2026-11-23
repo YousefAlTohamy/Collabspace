@@ -134,6 +134,13 @@ class TaskController extends Controller
             $query->whereHas('assignees', fn (Builder $q) => $q->where('user_id', $assigneeId));
         }
 
+        if (($teamId = $request->validated('team_id')) !== null) {
+            $query->whereHas('assignees', fn (Builder $assignees) => $assignees
+                ->join('project_members', 'project_members.user_id', '=', 'users.id')
+                ->whereColumn('project_members.project_id', 'tasks.project_id')
+                ->where('project_members.team_id', $teamId));
+        }
+
         if ($request->validated('assigned_to_me')) {
             $query->whereHas('assignees', fn (Builder $q) => $q->where('user_id', $request->user()->id));
         }

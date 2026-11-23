@@ -23,7 +23,7 @@ class ReportController extends Controller
         $project = $this->authorizedProject($request->user(), $request->validated('project_id'));
         [$from, $to] = $request->window();
 
-        return response()->json(['data' => $stats->execute($request->user(), $project, $from, $to)]);
+        return response()->json(['data' => $stats->execute($request->user(), $project, $from, $to, calendarDay: $request->isToday())]);
     }
 
     public function store(StoreReportRequest $request, ComputeReportStats $stats): JsonResponse

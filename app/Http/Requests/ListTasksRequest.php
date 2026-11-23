@@ -30,6 +30,7 @@ class ListTasksRequest extends FormRequest
             'status' => ['nullable', Rule::enum(TaskStatus::class)],
             'priority' => [$isProjectBoard ? 'nullable' : 'exclude', Rule::enum(TaskPriority::class)],
             'assignee_id' => [$isProjectBoard ? 'nullable' : 'exclude', 'integer', Rule::exists('project_members', 'user_id')->where('project_id', $this->route('project')?->id)],
+            'team_id' => ['nullable', 'integer', 'min:1', Rule::exists('teams', 'id')],
             'assigned_to_me' => ['nullable', 'boolean'],
             'search' => ['nullable', 'string', 'max:200'],
             'per_page' => ['nullable', 'integer', 'min:1', $isProjectBoard ? 'max:100' : 'max:50'],

@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\Task;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -210,6 +211,40 @@ class TasksTest extends TestCase
         // project_id of a project I am not a member of => 403.
         $foreign = Project::factory()->create();
         $this->actingAs($me, 'sanctum')->getJson('/api/v1/tasks?project_id='.$foreign->id)->assertForbidden();
+    }
+
+    public function test_team_filter_matches_assignees_in_the_tasks_own_project(): void
+    {
+        $backend = Team::query()->create(['name' => 'Backend']);
+        $frontend = Team::query()->create(['name' => 'Frontend']);
+        $firstAssignee = User::factory()->create();
+        $secondAssignee = User::factory()->create();
+        foreach ([$firstAssignee, $secondAssignee] as $assignee) {
+            ProjectMember::factory()->for($this->project)->for($assignee)->for($backend)->create();
+        }
+
+        $matching = Task::factory()->for($this->project)->create();
+        $matching->assignees()->attach([$firstAssignee->id, $secondAssignee->id]);
+        Task::factory()->for($this->project)->create();
+
+        $otherProject = Project::factory()->for($this->leader, 'creator')->create();
+        ProjectMember::factory()->for($otherProject)->for($firstAssignee)->for($frontend)->create();
+        Task::factory()->for($otherProject)->create()->assignees()->attach($firstAssignee);
+
+        $foreignProject = Project::factory()->create();
+        ProjectMember::factory()->for($foreignProject)->for($firstAssignee)->for($backend)->create();
+        Task::factory()->for($foreignProject)->create()->assignees()->attach($firstAssignee);
+
+        $this->actingAs($this->leader, 'sanctum');
+        foreach (['/api/v1/tasks', '/api/v1/projects/'.$this->project->id.'/tasks'] as $uri) {
+            $this->getJson($uri.'?team_id='.$backend->id)->assertOk()
+                ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $matching->id)
+                ->assertJsonPath('meta.total', 1);
+        }
+
+        $this->getJson('/api/v1/tasks?team_id='.$backend->id.'&project_id='.$foreignProject->id)->assertForbidden();
+        $this->getJson('/api/v1/projects/'.$foreignProject->id.'/tasks?team_id='.$backend->id)->assertForbidden();
+        $this->getJson('/api/v1/tasks?team_id=unknown')->assertUnprocessable()->assertJsonValidationErrors('team_id');
     }
 
     public function test_show_update_delete_permissions(): void

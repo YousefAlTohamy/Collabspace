@@ -15,7 +15,7 @@ class ReportOverviewRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'period' => ['nullable', 'string', Rule::in(array_keys(self::DAYS))],
+            'period' => ['nullable', 'string', Rule::in(['today', ...array_keys(self::DAYS)])],
             'project_id' => ['nullable', 'integer'],
         ];
     }
@@ -25,6 +25,13 @@ class ReportOverviewRequest extends FormRequest
     {
         $to = CarbonImmutable::now('UTC');
 
-        return [$to->subDays(self::DAYS[$this->validated('period') ?? 'year']), $to];
+        $from = $this->isToday() ? $to->startOfDay() : $to->subDays(self::DAYS[$this->validated('period') ?? 'year']);
+
+        return [$from, $to];
+    }
+
+    public function isToday(): bool
+    {
+        return $this->validated('period') === 'today';
     }
 }

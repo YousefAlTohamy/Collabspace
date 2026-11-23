@@ -1119,9 +1119,9 @@
                 "value": "application/json"
               }
             ],
-            "description": "",
+            "description": "Enable team_id to match tasks assigned to a member of that team in this project. Pick an ID from List teams.",
             "url": {
-              "raw": "{{baseUrl}}/projects/{{projectId}}/tasks?status=todo&priority=high&assigned_to_me=1&search=wire&per_page=50",
+              "raw": "{{baseUrl}}/projects/{{projectId}}/tasks?status=todo&priority=high&team_id={{teamId}}&assigned_to_me=1&search=wire&per_page=50",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1139,6 +1139,11 @@
                 {
                   "key": "priority",
                   "value": "high",
+                  "disabled": true
+                },
+                {
+                  "key": "team_id",
+                  "value": "{{teamId}}",
                   "disabled": true
                 },
                 {
@@ -1181,9 +1186,9 @@
                 "value": "application/json"
               }
             ],
-            "description": "",
+            "description": "Enable team_id to match a team on an assignee's membership in each task's project.",
             "url": {
-              "raw": "{{baseUrl}}/tasks?project_id={{projectId}}&assigned_to_me=1&status=todo&per_page=15",
+              "raw": "{{baseUrl}}/tasks?project_id={{projectId}}&team_id={{teamId}}&assigned_to_me=1&status=todo&per_page=15",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1194,6 +1199,11 @@
                 {
                   "key": "project_id",
                   "value": "{{projectId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "team_id",
+                  "value": "{{teamId}}",
                   "disabled": true
                 },
                 {
@@ -1661,9 +1671,9 @@
                 "value": "application/json"
               }
             ],
-            "description": "",
+            "description": "Enable uploaded_by_me=1 to list files you uploaded in this project.",
             "url": {
-              "raw": "{{baseUrl}}/projects/{{projectId}}/files?search=report",
+              "raw": "{{baseUrl}}/projects/{{projectId}}/files?uploaded_by_me=1&search=report",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1673,6 +1683,11 @@
                 "files"
               ],
               "query": [
+                {
+                  "key": "uploaded_by_me",
+                  "value": "1",
+                  "disabled": true
+                },
                 {
                   "key": "search",
                   "value": "report",
@@ -1703,9 +1718,9 @@
                 "value": "application/json"
               }
             ],
-            "description": "",
+            "description": "Enable uploaded_by_me=1 to list your uploads in projects you can access.",
             "url": {
-              "raw": "{{baseUrl}}/files?project_id={{projectId}}&search=report",
+              "raw": "{{baseUrl}}/files?project_id={{projectId}}&uploaded_by_me=1&search=report",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1716,6 +1731,11 @@
                 {
                   "key": "project_id",
                   "value": "{{projectId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "uploaded_by_me",
+                  "value": "1",
                   "disabled": true
                 },
                 {
@@ -2591,7 +2611,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "period: week | month | three_months | year. Rates include change_vs_last_period; series are monthly.",
+            "description": "period: today | week | month | three_months | year. Today uses midnight UTC through now and compares against the same hours yesterday. The chart keeps a month label.",
             "url": {
               "raw": "{{baseUrl}}/reports/overview?period=year&project_id={{projectId}}",
               "host": [
