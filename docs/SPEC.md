@@ -117,9 +117,10 @@ recent files (5) from the user's projects; my tasks due soonest (5, not complete
 
 **R14 Search.** `GET /search?q=` (min 2 chars) returns up to 5 projects, 5 tasks and 5 files, **only within the user's projects**. Escape LIKE wildcards.
 
-**R15 Google sign-in.** The client sends a Google ID token. The server verifies the RS256 signature against Google's public keys (cached; refetched once when the `kid` is unknown),
+**R15 Google sign-in.** The client sends a Google ID token. The server verifies the RS256 signature against Google's public keys (cached for one hour; refetched when the `kid` is unknown, at most once per minute),
 `iss` (`accounts.google.com` or `https://accounts.google.com`), `aud` = `GOOGLE_CLIENT_ID`, `exp`, and requires `email_verified = true`.
-Matching order: (1) a user with the same `google_id` (the token's `sub`); (2) a user with the same email, which is then linked (only possible because the email is verified by Google);
+Matching order: (1) a user with the same `google_id` (the token's `sub`); (2) a user with the same email, which is linked only when Google is authoritative for that address (an `@gmail.com` address or a token with the `hd` claim), otherwise the request is rejected with 409.
+When an existing account is linked and its email was never verified (password registration has no verification), its password is replaced by a random one and its tokens are revoked, because someone else may have registered the address first;
 (3) otherwise a new user (name from the token, random password, `email_verified_at` set). An account already linked to a different Google id is rejected (409). Nothing from the token other than name, email and `sub` is stored; the avatar URL is ignored.
 
 ## 4. Data model
@@ -127,7 +128,7 @@ Matching order: (1) a user with the same `google_id` (the token's `sub`); (2) a 
 Auto-increment bigint ids, `created_at/updated_at` everywhere, FKs with sensible `cascadeOnDelete`, indexes on every FK and on common filters.
 Enums are lowercase snake strings.
 
-- **users**: name, email (unique), password, phone?, job_title?, years_of_experience?, bio?, availability_status (`available|busy|away`, default `available`), avatar_path?, google_id? (unique)
+- **users**: name, email (unique), password, phone?, job_title?, years_of_experience?, bio?, availability_status (`available|busy|away`, default `available`), avatar_path?, google_id? (unique, up to 255 chars)
 - **teams**: name — seeded: UI/UX, Frontend, Backend, Marketing.
 - **projects**: name, description?, type? (free text e.g. "SaaS"), priority (`low|medium|high`), status (`active|done`, default `active`), start_date, end_date, created_by (user), completed_at? (set when status becomes `done`, cleared when it goes back to `active`).
 - **project_members**: project_id, user_id, role (`leader|member`), team_id?, job_title? — unique(project_id, user_id).
