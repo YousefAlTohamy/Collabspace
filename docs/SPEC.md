@@ -149,7 +149,7 @@ Enums are lowercase snake strings.
 Base: `/api/v1`. JSON in/out. Auth: `Authorization: Bearer <token>` (Sanctum personal access tokens).
 Stage tag in brackets = the stage that implements it.
 
-### Auth & profile — public: register, login, forgot-password, reset-password
+### Auth & profile — public: register, login, google, forgot-password, reset-password
 - `POST /auth/register` [S1] — name, email, password (+confirmation) → 201 `{user, token, token_type, expires_at}`
 - `POST /auth/login` [S1] — email, password, remember? → 200 same shape. Wrong credentials => 401 with one generic message.
 - `POST /auth/logout` [S1] — revokes the current token.
