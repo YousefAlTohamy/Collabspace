@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\IssuesAuthTokens;
 use App\Http\Requests\ForgotPasswordRequest;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\ResetPasswordRequest;
-use App\Http\Resources\UserResource;
 use App\Models\User;
-use DateTimeInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -18,12 +17,14 @@ use Illuminate\Support\Facades\Password;
 
 class AuthController extends Controller
 {
+    use IssuesAuthTokens;
+
     public function register(RegisterRequest $request): JsonResponse
     {
         // 'remember' controls the token lifetime, it is not a user attribute.
         $user = User::create($request->safe()->except('remember'));
 
-        return $this->tokenResponse($user, $this->tokenExpiry($request->boolean('remember')), 201);
+        return $this->tokenResponse($user, $request->boolean('remember'), 201);
     }
 
     public function login(LoginRequest $request): JsonResponse
@@ -42,7 +43,7 @@ class AuthController extends Controller
             return $this->invalidCredentials();
         }
 
-        return $this->tokenResponse($user, $this->tokenExpiry($request->boolean('remember')));
+        return $this->tokenResponse($user, $request->boolean('remember'));
     }
 
     public function logout(Request $request): JsonResponse
@@ -83,27 +84,9 @@ class AuthController extends Controller
         ], 422);
     }
 
-    private function tokenExpiry(bool $remember): DateTimeInterface
-    {
-        // Same lifetime rule for register and login: 1 day, 30 days with remember.
-        return $remember ? now()->addDays(30) : now()->addDay();
-    }
-
     private function invalidCredentials(): JsonResponse
     {
         // One generic message for unknown email and wrong password (no user enumeration).
         return response()->json(['message' => __('auth.failed')], 401);
-    }
-
-    private function tokenResponse(User $user, DateTimeInterface $expiresAt, int $status = 200): JsonResponse
-    {
-        $token = $user->createToken('auth', ['*'], $expiresAt);
-
-        return response()->json([
-            'user' => new UserResource($user),
-            'token' => $token->plainTextToken,
-            'token_type' => 'Bearer',
-            'expires_at' => $expiresAt->toIso8601String(),
-        ], $status);
     }
 }

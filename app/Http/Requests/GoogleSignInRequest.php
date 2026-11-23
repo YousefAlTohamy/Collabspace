@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class GoogleSignInRequest extends FormRequest
+{
+    /** @return array<string, list<string>> */
+    public function rules(): array
+    {
+        return [
+            'id_token' => ['required', 'string', 'max:4096'],
+            'remember' => ['boolean'],
+        ];
+    }
+}

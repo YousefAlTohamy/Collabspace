@@ -4,6 +4,7 @@ use App\Http\Controllers\AiController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MeetingSummaryController;
 use App\Http\Controllers\MeetingTranscriptController;
@@ -26,6 +27,7 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware('throttle:auth-register')->post('/auth/register', [AuthController::class, 'register']);
 
     Route::middleware('throttle:auth-login')->post('/auth/login', [AuthController::class, 'login']);
+    Route::middleware('throttle:auth-login')->post('/auth/google', GoogleAuthController::class);
 
     Route::middleware('throttle:auth-password')->group(function (): void {
         Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
