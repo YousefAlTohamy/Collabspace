@@ -72,6 +72,10 @@
       "value": ""
     },
     {
+      "key": "attachmentMessageId",
+      "value": ""
+    },
+    {
       "key": "meetingId",
       "value": ""
     },
@@ -1969,7 +1973,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Same whitelist and 10 MB limit as project files. body and/or attachment is required.",
+            "description": "Select a file for the attachment field. Uses the project file whitelist and 10 MB limit. Saves attachmentMessageId for the download request.",
             "url": {
               "raw": "{{baseUrl}}/conversations/{{conversationId}}/messages",
               "host": [
@@ -2003,7 +2007,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });"
+                  "pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+                  "const message = pm.response.code === 201 ? pm.response.json().data : null;",
+                  "pm.collectionVariables.set(\"attachmentMessageId\", message && message.attachment ? message.id : \"\");",
+                  "pm.test(\"Message has an attachment\", function () { pm.expect(message && message.attachment).to.be.an(\"object\"); });"
                 ]
               }
             }
@@ -2019,15 +2026,15 @@
                 "value": "application/json"
               }
             ],
-            "description": "Set messageId to a message that has an attachment. Participants only.",
+            "description": "Downloads the attachment from the message saved by Send message with attachment. Conversation participants only.",
             "url": {
-              "raw": "{{baseUrl}}/messages/{{messageId}}/attachment",
+              "raw": "{{baseUrl}}/messages/{{attachmentMessageId}}/attachment",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "messages",
-                "{{messageId}}",
+                "{{attachmentMessageId}}",
                 "attachment"
               ]
             }
@@ -2038,7 +2045,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });"
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Download uses safe attachment headers\", function () {",
+                  "  pm.expect(pm.response.headers.get(\"Content-Disposition\")).to.match(/^attachment(?:;|$)/i);",
+                  "  pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.equal(\"nosniff\");",
+                  "});"
                 ]
               }
             }
@@ -2115,9 +2126,9 @@
                 "value": "application/json"
               }
             ],
-            "description": "Meetings where you are organizer or participant. Default range: today to +30 days.",
+            "description": "Meetings where you are organizer or participant. This example covers the next seven UTC calendar dates, starting today.",
             "url": {
-              "raw": "{{baseUrl}}/meetings?from=2026-11-01&to=2026-12-31&per_page=50",
+              "raw": "{{baseUrl}}/meetings?from={{calendarFrom}}&to={{calendarTo}}&per_page=50",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2127,23 +2138,34 @@
               "query": [
                 {
                   "key": "from",
-                  "value": "2026-11-01",
+                  "value": "{{calendarFrom}}",
                   "disabled": false
                 },
                 {
                   "key": "to",
-                  "value": "2026-12-31",
+                  "value": "{{calendarTo}}",
                   "disabled": false
                 },
                 {
                   "key": "per_page",
                   "value": "50",
-                  "disabled": true
+                  "disabled": false
                 }
               ]
             }
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const now = Date.now();",
+                  "pm.variables.set(\"calendarFrom\", new Date(now).toISOString().slice(0, 10));",
+                  "pm.variables.set(\"calendarTo\", new Date(now + 6 * 86400000).toISOString().slice(0, 10));"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
