@@ -43,6 +43,7 @@ erDiagram
     USERS {
         bigint id PK
         string email UK
+        string google_id UK
         string password
         string name
         string availability_status

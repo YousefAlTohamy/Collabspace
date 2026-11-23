@@ -19,7 +19,7 @@ Members see and change what belongs to their projects; leaders manage the projec
 | Sign in (email, password, remember me) | `POST /auth/login` (`remember` → 30-day token) | ✅ |
 | Forgot password | `POST /auth/forgot-password`, `POST /auth/reset-password` (link points to the frontend) | ✅ |
 | Sign up (full name, email, password) | `POST /auth/register` | ✅ |
-| Sign in / up with Google | — | ❌ needs OAuth client credentials; email + password covers the flow |
+| Sign in / up with Google | `POST /auth/google` (Google ID token verified on the server, R15) | ✅ needs `GOOGLE_CLIENT_ID` in `.env` |
 | Language selector | client side | ❌ no API needed |
 
 ## Dashboard
