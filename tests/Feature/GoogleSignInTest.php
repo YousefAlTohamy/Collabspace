@@ -67,6 +67,16 @@ class GoogleSignInTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_sign_in_ignores_a_non_string_email_field(): void
+    {
+        $this->fakeKeys();
+
+        $this->postJson(self::ENDPOINT, [
+            'id_token' => $this->sign($this->claims()),
+            'email' => ['ignored@example.test'],
+        ])->assertOk()->assertJsonPath('user.email', 'google.user@example.test');
+    }
+
     public function test_links_by_email_then_keeps_using_the_same_user_if_the_google_email_changes(): void
     {
         $this->fakeKeys();

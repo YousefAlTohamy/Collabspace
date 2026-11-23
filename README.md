@@ -5,7 +5,7 @@
 Backend API for **Collabspace**, a team collaboration platform for remote teams. It brings projects, kanban tasks, file sharing, chat,
 meetings (with transcript and AI summary), reports and an AI assistant into one workspace, so teams stop switching between separate tools.
 
-Built with **Laravel 13**, **PHP 8.4**, **MySQL 8**, **Laravel Sanctum** and **Docker (Laravel Sail)**.
+Built with **Laravel 13**, **PHP 8.4**, **MySQL 8.4**, **Laravel Sanctum** and **Docker (Laravel Sail)**.
 The full business rules and the API contract are in [`docs/SPEC.md`](docs/SPEC.md).
 
 ## What the product does
@@ -14,13 +14,13 @@ See `docs/FIGMA_COVERAGE.md` for the mapping between the Figma screens and the A
 
 | Module | What it covers |
 |---|---|
-| **Auth & profile** | Register, login, logout, password reset, profile, avatar, password change, workspace user search |
+| **Auth & profile** | Register, password and Google sign-in, logout, password reset, profile, avatar, password change, workspace user search |
 | **Projects & teams** | Projects with members, roles (`leader` / `member`) and teams (UI/UX, Frontend, Backend, Marketing) |
 | **Tasks** | Kanban statuses, priorities, assignees, reviewer, progress, comments, overdue flag |
 | **Files** | Project files with strict type/size checks, private storage and authorized downloads |
-| **Chat** | One channel per project and direct messages, attachments, cursor pagination |
+| **Chat** | Project and team channels, direct messages, attachments, cursor pagination |
 | **Meetings** | Calendar, participants, transcript with search, AI-generated summary |
-| **Notifications** | Added to a project, task assigned, meeting invitation |
+| **Notifications** | Project membership, task assignments, meeting invitations, overdue tasks and upcoming meeting reminders |
 | **Dashboard & reports** | Personal dashboard, report statistics with period comparison, saved report snapshots |
 | **Search** | One global search across projects, tasks and files |
 | **AI assistant** | Per-user assistant thread (any OpenAI-compatible provider) |
@@ -30,7 +30,7 @@ See `docs/FIGMA_COVERAGE.md` for the mapping between the Figma screens and the A
 Everything is organized around the **project**: being a member of a project is the permission boundary for almost everything.
 
 - The creator of a project becomes its leader. A project always keeps at least one leader.
-- Only project members can see its tasks, files, members, chat channel or meetings. Signed-in non-members get `403` on access attempts.
+- Project members can see its tasks, files, member list and project channel. Signed-in non-members get `403` on access attempts.
 - Tasks can move between `todo`, `in_progress` and `in_review` before completion. A task is completed by its **reviewer** (or a leader, or an assignee when no reviewer is set).
   Reopening a completed task is reserved for the reviewer or a leader. Completion forces progress to 100%.
 - A project can only be marked `done` when all of its tasks are completed. Project progress is always computed, never stored.
@@ -40,7 +40,7 @@ Everything is organized around the **project**: being a member of a project is t
 - Meetings are visible only to the organizer and participants. Project-linked meetings also require current membership. For a meeting without a project, invitees must share a project with the organizer.
 - Reports are computed from real task data (`created_at`, `completed_at`, `due_date`) for explicit time windows and compare each period with the previous one.
 
-See [`docs/SPEC.md`](docs/SPEC.md) for all rules (R1–R14), the data model and every endpoint.
+See [`docs/SPEC.md`](docs/SPEC.md) for all rules (R1–R15), the data model and every endpoint.
 
 ## Security
 
@@ -48,7 +48,8 @@ See [`docs/SPEC.md`](docs/SPEC.md) for all rules (R1–R14), the data model and 
 - **Authorization**: endpoints enforce object-level access through policies or queries scoped to the user's memberships or records. Cross-project access is covered by tests.
   A test fails if a new route is added without authentication.
 - **Brute force protection**: rate limits on login (per email+IP and per IP), registration, password reset, uploads and the AI endpoints.
-- **No user enumeration**: the same response for unknown email and wrong password, and for forgot-password; login does equivalent hashing work on both paths.
+- **Password authentication** uses the same error and equivalent hashing work for wrong-password and unknown-email logins. Forgot-password returns the same message for known and unknown email addresses.
+- **Google sign-in** verifies the ID token signature and claims, checks whether Google is authoritative for an existing account's email before linking it, and rate-limits signing-key refreshes (R15).
 - **Project files and chat attachments**: extension whitelist and real content (MIME) check, 10 MB limit, random names, private disk, no storage path in responses,
   downloads only through an authorized endpoint with `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`.
 - **Input handling**: Form Requests everywhere, explicit `$fillable`, server-owned fields (`created_by`, `user_id`, ...) are never read from input,
@@ -107,7 +108,7 @@ Start the stack and prepare the app. Wait for MySQL to become healthy before run
 ```bash
 ./vendor/bin/sail up -d
 ./vendor/bin/sail artisan key:generate
-./vendor/bin/sail artisan migrate:fresh --seed
+./vendor/bin/sail artisan migrate --seed
 ./vendor/bin/sail artisan storage:link
 ```
 
@@ -120,7 +121,7 @@ docker compose exec -u sail laravel.test php artisan migrate --seed
 docker compose exec laravel.test php artisan storage:link
 ```
 
-Run the seed as the `sail` user so the API can read the seeded private files.
+Run the seed as the `sail` user so the API can read the seeded private files. Use `--seed` for the initial setup on an empty database. For later schema updates, run `migrate` without `--seed`.
 
 The API is then available at `http://localhost:8000/api/v1` and emails (password reset) arrive in Mailpit at `http://localhost:8025`.
 If port 8000 is busy, update `APP_PORT` and `APP_URL` in `.env`.
@@ -129,7 +130,7 @@ In the `local` environment, `--seed` also loads **demo data** (see below). In an
 
 ### Scheduled notifications
 
-Run the scheduler worker with `docker compose exec laravel.test php artisan schedule:work` to send meeting reminders and overdue task notifications every five minutes. To send the due notifications once, run `docker compose exec laravel.test php artisan notifications:send-reminders`.
+Run the scheduler worker with `docker compose exec -u sail laravel.test php artisan schedule:work` to send meeting reminders and overdue task notifications every five minutes. To check for due notifications immediately, run `docker compose exec -u sail laravel.test php artisan notifications:send-reminders`.
 
 ### Environment variables
 
@@ -139,7 +140,7 @@ Run the scheduler worker with `docker compose exec laravel.test php artisan sche
 | `DB_*` | MySQL connection (preconfigured for Sail) |
 | `MAIL_*` | Mail transport (Mailpit in development) |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID used to verify ID tokens. Google sign-in returns `503` when this is empty. |
-| `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT` | Any OpenAI-compatible chat-completions provider. Without them the AI endpoints answer `503` |
+| `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT` | OpenAI-compatible provider settings. Set `AI_BASE_URL` to the prefix before `/chat/completions`. Generating an AI reply or meeting summary returns `503` when the provider is unconfigured or unavailable. |
 
 Set `APP_DEBUG=false` outside local development.
 
@@ -172,12 +173,23 @@ chat messages, upcoming meetings, a meeting with transcript and summary, notific
 
 Import [`postman/Collabspace.postman_collection.json`](postman/Collabspace.postman_collection.json). It covers every endpoint, grouped by module.
 
-1. Set the `baseUrl` collection variable to `http://localhost:8000/api/v1` for the default local stack.
+1. Set `baseUrl` to `http://localhost:8000/api/v1` for the default local stack, or use the port configured in `.env`.
 2. Run **Auth → Login (saves token)** with a demo account (set the `email` and `password` collection variables, e.g. `mohamed@collabspace.test` / `Password123`).
    The token is saved automatically and sent as a Bearer token on authenticated requests.
    Or start fresh: **Register** creates a new user, **Register helper: second user** creates a teammate.
 3. Ids such as `projectId`, `taskId`, `fileId`, `meetingId` are saved by the "create" requests, so you can run the folders in order.
-4. File uploads need you to pick a file in the request body. The AI requests need the `AI_*` variables in `.env`.
+4. Pick a local file in each multipart request. `Send message with attachment` saves the ID for `Download message attachment`.
+5. To try Google sign-in, use the same `GOOGLE_CLIENT_ID` in `.env` and on the browser client that obtains the ID token. Register the browser origin in Google Cloud, then paste a fresh ID token into the Postman request. With the basic Sign in with Google scopes (`openid`, `email`, `profile`), users can sign in without a Test Users invite. See [Google's audience settings](https://support.google.com/cloud/answer/15549945#publishing-status-testing).
+6. AI replies and meeting summaries use the optional `AI_*` settings.
+7. Use the **Cleanup** folder last on records created for the demo. It includes delete requests.
+
+### Quick demo from the seeded data
+
+1. Sign in as Mohamed (`mohamed@collabspace.test`) with **Login (saves token)**, then run **Dashboard**. Open **List my projects**, find Alpha's ID and set `projectId`. Run **Project teams tab** and **Reports overview** for the same project.
+2. In **List project tasks**, use `status=in_review` and `search=Report charts`, and disable any `assigned_to_me` or priority filter. Save the ID as `taskId`. On a fresh seed, sign in as Mohanad (`mohanad@collabspace.test`), the assignee. **Change status: completed** returns `403` while a reviewer is assigned. The reviewer, Khalid (`khalid@collabspace.test`), can run the same request and gets `200` with `progress: 100`.
+3. As Mohamed, find SepetGo's ID in **List my projects** with the search and status filters off. As Khalid, **Get project** with that ID returns `403` because he's outside SepetGo.
+
+The Quick demo uses password sign-in and works with the seeded database alone.
 
 ## Endpoint overview
 
@@ -199,9 +211,7 @@ All 64 API routes live under `/api/v1`. Only `auth/register`, `auth/login`, `aut
 
 ## Decisions and limits (v1)
 
-- **No realtime chat**: messages are REST with cursor pagination (clients poll). WebSockets would add infrastructure that the first version does not need.
-- **Meetings store a link** (Meet, Zoom, Jitsi...) instead of hosting video. Transcript entries are stored as data; the summary is generated from them by the AI provider.
-- **Email is read-only** in the profile: changing it safely needs a verification flow.
-- Accounts created with Google have a random password that users can replace through the password-reset flow. Signing in with Google to an existing password account links it only for @gmail.com or Workspace addresses and replaces that account's password, because email addresses are not verified at registration.
-- Not included: chat threads and calls, file versioning, daily status updates, table/timeline task views.
-  The full list is in `docs/SPEC.md` (section 7).
+- **Chat** uses REST with cursor pagination, so the client polls for new messages. The API supports project, team and direct conversations.
+- **Meetings** store an HTTPS link for an external service such as Meet or Zoom. The calendar accepts a date range. Meeting summaries send transcript text to the configured AI provider.
+- **Profile email** is read-only. New Google accounts receive a random password and can set a password through the reset flow. Google linking requires a Gmail address or a Workspace `hd` claim. Linking an existing account with an unverified email replaces its password and revokes its old tokens. A verified account keeps its credentials.
+- **v1 scope** keeps task views to Kanban data and omits chat threads and calls, file versioning, daily status updates, and other features listed in [SPEC §7](docs/SPEC.md#7-out-of-scope-for-v1-do-not-build).

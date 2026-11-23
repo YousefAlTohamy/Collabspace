@@ -11,11 +11,34 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
 {
     use RefreshDatabase;
+
+    #[DataProvider('emailAuthEndpoints')]
+    public function test_auth_rejects_non_string_emails(string $endpoint): void
+    {
+        $this->postJson('/api/v1/auth/'.$endpoint, [
+            'name' => 'Jane Doe',
+            'email' => ['jane@example.com'],
+            'password' => 'Secret123',
+            'password_confirmation' => 'Secret123',
+            'token' => 'unused-reset-token',
+        ])->assertUnprocessable()->assertJsonValidationErrors('email');
+    }
+
+    public static function emailAuthEndpoints(): array
+    {
+        return [
+            'register' => ['register'],
+            'login' => ['login'],
+            'forgot password' => ['forgot-password'],
+            'reset password' => ['reset-password'],
+        ];
+    }
 
     public function test_user_can_register_and_receives_a_token(): void
     {

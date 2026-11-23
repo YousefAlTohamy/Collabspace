@@ -29,12 +29,17 @@ class AppServiceProvider extends ServiceProvider
     {
         Password::defaults(fn () => Password::min(8)->letters()->numbers());
 
-        RateLimiter::for('auth-login', fn (Request $request) => [
+        RateLimiter::for('auth-login', function (Request $request): array {
+            $email = $request->input('email');
+            $email = is_string($email) ? mb_strtolower(trim($email)) : '';
+
             // Per email+ip, plus a wider per-ip ceiling so one IP cannot rotate
             // emails to make 5 attempts against many different accounts.
-            Limit::perMinute(5)->by(mb_strtolower((string) $request->input('email')).'|'.$request->ip()),
-            Limit::perMinute(30)->by($request->ip()),
-        ]);
+            return [
+                Limit::perMinute(5)->by($email.'|'.$request->ip()),
+                Limit::perMinute(30)->by($request->ip()),
+            ];
+        });
 
         RateLimiter::for('auth-register', fn (Request $request) => [
             Limit::perMinute(5)->by($request->ip()),
