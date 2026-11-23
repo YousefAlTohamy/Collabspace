@@ -200,6 +200,6 @@ All 64 API routes live under `/api/v1`. Only `auth/register`, `auth/login`, `aut
 - **No realtime chat**: messages are REST with cursor pagination (clients poll). WebSockets would add infrastructure that the first version does not need.
 - **Meetings store a link** (Meet, Zoom, Jitsi...) instead of hosting video. Transcript entries are stored as data; the summary is generated from them by the AI provider.
 - **Email is read-only** in the profile: changing it safely needs a verification flow.
-- Accounts created with Google have a random password that users can replace through the password-reset flow.
+- Accounts created with Google have a random password that users can replace through the password-reset flow. Signing in with Google to an existing password account links it only for @gmail.com or Workspace addresses and replaces that account's password, because email addresses are not verified at registration.
 - Not included: chat threads and calls, file versioning, daily status updates, table/timeline task views.
   The full list is in `docs/SPEC.md` (section 7).

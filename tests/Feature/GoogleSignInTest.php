@@ -70,15 +70,25 @@ class GoogleSignInTest extends TestCase
     public function test_links_by_email_then_keeps_using_the_same_user_if_the_google_email_changes(): void
     {
         $this->fakeKeys();
-        $user = User::factory()->unverified()->create(['email' => 'google.user@example.test']);
-        $password = $user->password;
+        $password = 'original-password';
+        $user = User::factory()->unverified()->create([
+            'email' => 'google.user@gmail.com',
+            'password' => $password,
+        ]);
+        $oldTokens = [$user->createToken('laptop')->accessToken, $user->createToken('phone')->accessToken];
 
-        $this->postJson(self::ENDPOINT, ['id_token' => $this->sign($this->claims())])
+        $gmailClaims = ['email' => 'Google.User@GMAIL.COM'] + $this->claims();
+        $this->postJson(self::ENDPOINT, ['id_token' => $this->sign($gmailClaims)])
             ->assertOk()->assertJsonPath('user.id', $user->id);
         $user->refresh();
         $this->assertSame('google-subject', $user->google_id);
         $this->assertNotNull($user->email_verified_at);
-        $this->assertSame($password, $user->password);
+        $this->assertTrue(Hash::isHashed($user->password));
+        $this->assertFalse(Hash::check($password, $user->password));
+        foreach ($oldTokens as $oldToken) {
+            $this->assertModelMissing($oldToken);
+        }
+        $this->assertDatabaseCount('personal_access_tokens', 1);
 
         $token = $this->sign([
             'email' => 'changed@example.test',
@@ -88,9 +98,71 @@ class GoogleSignInTest extends TestCase
         ] + $this->claims());
         $this->postJson(self::ENDPOINT, ['id_token' => $token])->assertOk()
             ->assertJsonPath('user.id', $user->id)
-            ->assertJsonPath('user.email', 'google.user@example.test');
+            ->assertJsonPath('user.email', 'google.user@gmail.com');
         $this->assertDatabaseCount('users', 1);
         Http::assertSentCount(1);
+    }
+
+    public function test_links_a_verified_workspace_user_and_preserves_the_password_and_tokens(): void
+    {
+        $this->fakeKeys();
+        $verifiedAt = now()->subDays(2)->startOfSecond();
+        $user = User::factory()->create([
+            'email' => 'google.user@example.test',
+            'email_verified_at' => $verifiedAt,
+        ]);
+        $passwordHash = $user->password;
+        $oldToken = $user->createToken('laptop')->accessToken;
+
+        $token = $this->sign(['hd' => 'example.test'] + $this->claims());
+        $this->postJson(self::ENDPOINT, ['id_token' => $token])
+            ->assertOk()->assertJsonPath('user.id', $user->id);
+
+        $user->refresh();
+        $this->assertSame('google-subject', $user->google_id);
+        $this->assertSame($passwordHash, $user->password);
+        $this->assertTrue($user->email_verified_at->equalTo($verifiedAt));
+        $this->assertModelExists($oldToken);
+        $this->assertDatabaseCount('personal_access_tokens', 2);
+        $this->assertDatabaseCount('users', 1);
+    }
+
+    #[DataProvider('untrustedHostedDomainClaims')]
+    public function test_rejects_linking_an_existing_non_gmail_account_without_a_hosted_domain(array $hostedDomainClaims): void
+    {
+        $this->fakeKeys();
+        $user = User::factory()->unverified()->create(['email' => 'google.user@example.test']);
+        $oldToken = $user->createToken('laptop')->accessToken;
+        $original = $user->refresh()->getAttributes();
+
+        $token = $this->sign($hostedDomainClaims + $this->claims());
+        $this->postJson(self::ENDPOINT, ['id_token' => $token])->assertConflict()
+            ->assertExactJson(['message' => 'This email already has an account. Sign in with your password.']);
+
+        $this->assertSame($original, $user->fresh()->getAttributes());
+        $this->assertModelExists($oldToken);
+        $this->assertDatabaseCount('personal_access_tokens', 1);
+        $this->assertDatabaseCount('users', 1);
+    }
+
+    public static function untrustedHostedDomainClaims(): array
+    {
+        return [
+            'missing' => [[]],
+            'empty string' => [['hd' => '']],
+            'whitespace' => [['hd' => ' ']],
+            'non-string' => [['hd' => true]],
+        ];
+    }
+
+    public function test_accepts_a_subject_of_255_characters(): void
+    {
+        $this->fakeKeys();
+        $subject = str_repeat('a', 255);
+
+        $this->postJson(self::ENDPOINT, ['id_token' => $this->sign(['sub' => $subject] + $this->claims())])->assertOk();
+
+        $this->assertSame($subject, User::query()->sole()->google_id);
     }
 
     public function test_rejects_an_email_already_linked_to_a_different_google_subject(): void
@@ -133,7 +205,7 @@ class GoogleSignInTest extends TestCase
             'missing email' => [[], 'email'],
             'invalid email' => [['email' => 'not-an-email']],
             'empty subject' => [['sub' => '']],
-            'oversized subject' => [['sub' => str_repeat('a', 65)]],
+            'oversized subject' => [['sub' => str_repeat('a', 256)]],
         ];
     }
 
@@ -166,14 +238,24 @@ class GoogleSignInTest extends TestCase
         ];
     }
 
-    public function test_unknown_key_id_refetches_the_certs_once(): void
+    public function test_unknown_key_id_refetches_the_certs_at_most_once_per_minute(): void
     {
         $this->fakeKeys();
+        $this->travelTo(now()->startOfSecond());
         $token = JWT::encode($this->claims(), self::$key, 'RS256', 'unknown-key');
 
         $this->postJson(self::ENDPOINT, ['id_token' => $token])
             ->assertUnauthorized()->assertExactJson(['message' => 'Invalid Google credentials.']);
         Http::assertSentCount(2);
+
+        $this->postJson(self::ENDPOINT, ['id_token' => $token])
+            ->assertUnauthorized()->assertExactJson(['message' => 'Invalid Google credentials.']);
+        Http::assertSentCount(2);
+
+        $this->travel(61)->seconds();
+        $this->postJson(self::ENDPOINT, ['id_token' => $token])
+            ->assertUnauthorized()->assertExactJson(['message' => 'Invalid Google credentials.']);
+        Http::assertSentCount(3);
     }
 
     public function test_reuses_cached_keys_and_accepts_a_key_published_on_refresh(): void

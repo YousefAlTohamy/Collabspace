@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 
 class SignInWithGoogle
 {
-    /** @param array{sub: string, email: string, name: string} $claims */
+    /** @param array{sub: string, email: string, name: string, trusted_email: bool} $claims */
     public function execute(array $claims): User
     {
         try {
@@ -23,7 +23,7 @@ class SignInWithGoogle
         }
     }
 
-    /** @param array{sub: string, email: string, name: string} $claims */
+    /** @param array{sub: string, email: string, name: string, trusted_email: bool} $claims */
     private function matchOrCreate(array $claims): User
     {
         return DB::transaction(function () use ($claims): User {
@@ -43,11 +43,26 @@ class SignInWithGoogle
                 return $user;
             }
 
-            $user ??= new User([
-                'name' => $claims['name'],
-                'email' => $claims['email'],
-                'password' => Str::random(64),
-            ]);
+            if ($user === null) {
+                $user = new User([
+                    'name' => $claims['name'],
+                    'email' => $claims['email'],
+                    'password' => Str::random(64),
+                ]);
+            } else {
+                if (! $claims['trusted_email']) {
+                    throw new HttpResponseException(response()->json([
+                        'message' => 'This email already has an account. Sign in with your password.',
+                    ], 409));
+                }
+
+                // R15: An unverified signup may have been made by someone else.
+                if ($user->email_verified_at === null) {
+                    $user->password = Str::random(64);
+                    $user->tokens()->delete();
+                }
+            }
+
             $user->google_id = $claims['sub'];
             $user->email_verified_at ??= now();
             $user->save();

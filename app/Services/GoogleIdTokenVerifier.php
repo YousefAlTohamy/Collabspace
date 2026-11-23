@@ -24,7 +24,9 @@ class GoogleIdTokenVerifier
 
     private const CACHE_KEY = 'google-sign-in:jwks';
 
-    /** @return array{sub: string, email: string, name: string} */
+    private const REFRESH_KEY = 'google-sign-in:refresh';
+
+    /** @return array{sub: string, email: string, name: string, trusted_email: bool} */
     public function verify(#[\SensitiveParameter] string $idToken): array
     {
         $clientId = trim((string) config('services.google.client_id'));
@@ -34,7 +36,7 @@ class GoogleIdTokenVerifier
 
         $kid = $this->keyId($idToken);
         $keys = $this->keys();
-        if (! isset($keys[$kid])) {
+        if (! isset($keys[$kid]) && Cache::add(self::REFRESH_KEY, true, 60)) {
             $keys = $this->keys(refresh: true);
         }
         if (! isset($keys[$kid])) {
@@ -57,7 +59,7 @@ class GoogleIdTokenVerifier
         if (! in_array($claims->iss ?? null, ['accounts.google.com', 'https://accounts.google.com'], true)
             || ! ($audience === $clientId || (is_array($audience) && in_array($clientId, $audience, true)))
             || ! is_int($claims->exp ?? null) // The library checks the deadline when exp is present.
-            || ! is_string($sub) || trim($sub) === '' || mb_strlen($sub) > 64
+            || ! is_string($sub) || trim($sub) === '' || mb_strlen($sub) > 255
             || ! is_string($email) || mb_strlen($email) > 255 || ! filter_var($email, FILTER_VALIDATE_EMAIL)
             || ! in_array($claims->email_verified ?? null, [true, 'true'], true)) {
             throw new InvalidGoogleTokenException;
@@ -65,8 +67,14 @@ class GoogleIdTokenVerifier
 
         $email = mb_strtolower($email);
         $name = is_string($claims->name ?? null) ? trim($claims->name) : '';
+        $hostedDomain = $claims->hd ?? null;
 
-        return ['sub' => $sub, 'email' => $email, 'name' => mb_substr($name !== '' ? $name : Str::beforeLast($email, '@'), 0, 255)];
+        return [
+            'sub' => $sub,
+            'email' => $email,
+            'name' => mb_substr($name !== '' ? $name : Str::beforeLast($email, '@'), 0, 255),
+            'trusted_email' => str_ends_with($email, '@gmail.com') || (is_string($hostedDomain) && trim($hostedDomain) !== ''),
+        ];
     }
 
     private function keyId(#[\SensitiveParameter] string $idToken): string

@@ -11,7 +11,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table): void {
-            $table->string('google_id', 64)->collation('utf8mb4_0900_bin')->nullable()->unique();
+            $table->string('google_id', 255)->collation('utf8mb4_0900_bin')->nullable()->unique();
         });
     }
 
