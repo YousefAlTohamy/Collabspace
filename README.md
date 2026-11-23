@@ -116,9 +116,11 @@ On Windows (Git Bash / PowerShell), where the Sail script does not run, use Dock
 ```bash
 docker compose up -d
 docker compose exec laravel.test php artisan key:generate
-docker compose exec laravel.test php artisan migrate:fresh --seed
+docker compose exec -u sail laravel.test php artisan migrate --seed
 docker compose exec laravel.test php artisan storage:link
 ```
+
+Run the seed as the `sail` user so the API can read the seeded private files.
 
 The API is then available at `http://localhost:8000/api/v1` and emails (password reset) arrive in Mailpit at `http://localhost:8025`.
 If port 8000 is busy, update `APP_PORT` and `APP_URL` in `.env`.
