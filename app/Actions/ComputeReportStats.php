@@ -13,8 +13,13 @@ use Illuminate\Support\Facades\DB;
 
 class ComputeReportStats
 {
-    public function execute(User $user, ?Project $project, CarbonImmutable $from, CarbonImmutable $to): array
-    {
+    public function execute(
+        User $user,
+        ?Project $project,
+        CarbonImmutable $from,
+        CarbonImmutable $to,
+        bool $calendarDay = false,
+    ): array {
         // Database timestamps have second precision. The two inclusive windows must not overlap.
         $from = $from->startOfSecond();
         $to = $to->startOfSecond();
@@ -25,14 +30,14 @@ class ComputeReportStats
 
         $projectIds = (clone $projects)->select('projects.id');
         $tasks = Task::query()->whereIn('project_id', $projectIds);
-        $previousEnd = $from->subSecond();
+        $previousEnd = $calendarDay ? $to->subDay() : $from->subSecond();
         $previousStart = $previousEnd->subSeconds($from->diffInSeconds($to));
 
         return [
             'task_completion_rate' => $this->completionRate(clone $tasks, $to, $previousEnd),
             'projects_completion_rate' => $this->completionRate($projects, $to, $previousEnd),
             'teams_activity_rate' => $this->activityRate($projectIds, $previousStart, $previousEnd, $from, $to),
-            ...$this->monthlySeries($tasks, $from, $to),
+            ...$this->monthlySeries($tasks, $from, $to, $calendarDay ? $from : $from->startOfMonth()),
         ];
     }
 
@@ -79,7 +84,7 @@ class ComputeReportStats
         return $this->rate($counts->active, $total, $counts->previous_active, $total);
     }
 
-    private function monthlySeries(Builder $tasks, CarbonImmutable $from, CarbonImmutable $to): array
+    private function monthlySeries(Builder $tasks, CarbonImmutable $from, CarbonImmutable $to, CarbonImmutable $activityStart): array
     {
         $firstMonth = $from->startOfMonth();
         $before = (clone $tasks)->toBase()->selectRaw(
@@ -94,8 +99,10 @@ class ComputeReportStats
         $completed = (clone $tasks)->toBase()
             ->whereBetween('completed_at', [$firstMonth, $to])
             ->selectRaw("DATE_FORMAT(completed_at, '%Y-%m') AS month, COUNT(*) AS total,
-                COUNT(due_date) AS with_deadline,
-                COUNT(CASE WHEN DATE(completed_at) <= due_date THEN 1 END) AS on_time")
+                COUNT(CASE WHEN completed_at >= ? THEN 1 END) AS activity,
+                COUNT(CASE WHEN completed_at >= ? THEN due_date END) AS with_deadline,
+                COUNT(CASE WHEN completed_at >= ? AND DATE(completed_at) <= due_date THEN 1 END) AS on_time",
+                [$activityStart, $activityStart, $activityStart])
             ->groupBy('month')->get()->keyBy('month');
 
         $deadline = $progress = $activity = [];
@@ -111,7 +118,7 @@ class ComputeReportStats
 
             $deadline[] = ['month' => $key, 'value' => $due === 0 ? null : $this->percent((int) $counts->on_time, $due)];
             $progress[] = ['month' => $key, 'value' => $createdTotal === 0 ? null : $this->percent($completedTotal, $createdTotal)];
-            $activity[] = ['month' => $key, 'value' => $closed];
+            $activity[] = ['month' => $key, 'value' => (int) ($counts->activity ?? 0)];
         }
 
         return ['tasks_vs_deadline' => $deadline, 'projects_progress' => $progress, 'worker_activity' => $activity];

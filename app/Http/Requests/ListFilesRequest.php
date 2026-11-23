@@ -22,6 +22,7 @@ class ListFilesRequest extends FormRequest
     {
         return [
             'project_id' => [$this->route('project') === null ? 'nullable' : 'exclude', 'integer', 'min:1'],
+            'uploaded_by_me' => ['nullable', 'boolean'],
             'search' => ['nullable', 'string', 'max:255'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
         ];

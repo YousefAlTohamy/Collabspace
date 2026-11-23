@@ -62,7 +62,7 @@ Members see and change what belongs to their projects; leaders manage the projec
 | Create task overlay (name, dates, guests, files) | same endpoint with `assignee_ids[]`; files via `POST /projects/{project}/files` with `task_id` | ✅ |
 | Reviewer, priority, progress bar, comments counter, due date | `reviewer_id`, `priority`, `progress`, `comments_count`, `due_date` (+ `is_overdue`) | ✅ |
 | Tasks page: project filter, "My tasks" | `GET /tasks?project_id=&assigned_to_me=&status=&search=` | ✅ |
-| "UI/UX tasks", "Frontend tasks" … filters | — | ❌ no filter by the assignee's team; `assignee_id` covers the common case |
+| "UI/UX tasks", "Frontend tasks" … filters | `GET /tasks?team_id=` or `GET /projects/{project}/tasks?team_id=` | ✅ matches an assignee's team in the task's own project |
 | Task comments | `GET/POST /tasks/{task}/comments`, `PUT/DELETE /comments/{comment}` | ✅ |
 
 ## Chats
@@ -94,7 +94,7 @@ Members see and change what belongs to their projects; leaders manage the projec
 |---|---|---|
 | Task completion / projects completion / teams activity rates (+ change vs last month) | `GET /reports/overview` | ✅ computed from task timestamps for explicit windows |
 | Task completion time vs deadline, projects progress, worker activity charts | same response (monthly series) | ✅ |
-| Duration filter (today / week / month / 3 months / year) | `period=week\|month\|three_months\|year` | ⚠️ "today" is not offered |
+| Duration filter (today / week / month / 3 months / year) | `period=today\|week\|month\|three_months\|year` | ✅ Today uses midnight UTC through now |
 | Submit a detailed report | `POST /reports`, `GET /reports`, `GET /reports/{report}` | ✅ stores the computed numbers as a snapshot |
 | AI button on the report form | — | ❌ reports are numeric snapshots in v1 |
 
@@ -106,7 +106,7 @@ Members see and change what belongs to their projects; leaders manage the projec
 | Completed tasks counter | `GET /me/stats` | ✅ |
 | Hours worked, recent activities | — | ❌ the system does not track time or an activity log |
 | Tasks tab (To do / Done) | `GET /tasks?assigned_to_me=1&status=` | ✅ |
-| Files tab | `GET /files` | ⚠️ all files of my projects (no "uploaded by me" filter) |
+| Files tab | `GET /files?uploaded_by_me=1` | ✅ restricts the list to the user's uploads in their projects |
 | Settings: phone, availability, years of experience, avatar | `PUT /me`, `POST /me/avatar` | ✅ |
 | Settings: email | shown, read-only | ⚠️ changing it safely needs a verification flow |
 | Settings: current team / project | derived from `GET /projects` | ⚠️ not a stored field |

@@ -78,6 +78,26 @@ class ReportsTest extends TestCase
             ->assertJsonPath('data.worker_activity', [['month' => '2026-03', 'value' => 3], ['month' => '2026-04', 'value' => 1]]);
     }
 
+    public function test_today_uses_utc_midnight_and_compares_to_the_same_time_yesterday(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-04-15 15:00:00.123456', '+03:00'));
+        $project = Project::factory()->create(['created_at' => '2026-04-01']);
+        $owner = $project->creator;
+
+        $this->completed($project, '2026-04-01', '2026-04-14 12:00:00', '2026-04-14');
+        $this->completed($project, '2026-04-01', '2026-04-14 12:00:01', '2026-04-14')->assignees()->attach($owner);
+        $this->completed($project, '2026-04-01', '2026-04-15 00:00:00', '2026-04-15')->assignees()->attach($owner);
+        $this->completed($project, '2026-04-01', '2026-04-15 12:00:00', '2026-04-14');
+        $this->completed($project, '2026-04-01', '2026-04-15 12:00:01', '2026-04-15');
+
+        $this->actingAs($owner, 'sanctum')->getJson('/api/v1/reports/overview?period=today')->assertOk()
+            ->assertJsonPath('data.task_completion_rate', ['value' => 80, 'change_vs_last_period' => 60])
+            ->assertJsonPath('data.teams_activity_rate', ['value' => 100, 'change_vs_last_period' => 100])
+            ->assertJsonPath('data.tasks_vs_deadline', [['month' => '2026-04', 'value' => 50]])
+            ->assertJsonPath('data.projects_progress', [['month' => '2026-04', 'value' => 80]])
+            ->assertJsonPath('data.worker_activity', [['month' => '2026-04', 'value' => 2]]);
+    }
+
     public function test_report_requests_validate_period_dates_and_project_access(): void
     {
         config(['app.debug' => false]);

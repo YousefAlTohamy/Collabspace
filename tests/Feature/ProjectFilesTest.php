@@ -189,6 +189,27 @@ class ProjectFilesTest extends TestCase
             ->assertJsonCount(1, 'data');
     }
 
+    public function test_uploaded_by_me_filters_only_files_in_visible_projects(): void
+    {
+        $member = $this->member();
+        $mine = ProjectFile::factory()->for($this->project)->for($member, 'uploader')->create();
+        ProjectFile::factory()->for($this->project)->for($this->leader, 'uploader')->create();
+
+        $foreignProject = Project::factory()->create();
+        ProjectFile::factory()->for($foreignProject)->for($member, 'uploader')->create();
+
+        $this->actingAs($member, 'sanctum');
+        foreach (['/api/v1/files', '/api/v1/projects/'.$this->project->id.'/files'] as $uri) {
+            $this->getJson($uri.'?uploaded_by_me=1')->assertOk()
+                ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $mine->id);
+            $this->getJson($uri.'?uploaded_by_me=0')->assertOk()->assertJsonCount(2, 'data');
+        }
+
+        $this->getJson('/api/v1/files?uploaded_by_me=1&project_id='.$foreignProject->id)->assertForbidden();
+        $this->getJson('/api/v1/projects/'.$foreignProject->id.'/files?uploaded_by_me=1')->assertForbidden();
+        $this->getJson('/api/v1/files?uploaded_by_me=maybe')->assertUnprocessable()->assertJsonValidationErrors('uploaded_by_me');
+    }
+
     public function test_download_is_authorized_for_any_member(): void
     {
         Storage::fake('local');

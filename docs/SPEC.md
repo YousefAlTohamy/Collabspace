@@ -91,7 +91,7 @@ Download only via authorized endpoint (R2). Deleting a project removes its store
 **R10 Notifications** (Laravel database notifications): created when a user is (a) added to a project, (b) assigned to a task,
 (c) invited to a meeting, and by a scheduled command when (d) a meeting starts within 30 minutes (once per meeting, to its participants who still have access to the project) or (e) a task is overdue (once per overdue episode, to its assignees; the flag is cleared when the due date moves to the future or the task is completed). Never notify the actor about their own action. A user only reads/marks their own.
 
-**R11 Reports** (scope = projects the user is a member of; optional `project_id` must be one of them; `period` = `week|month|three_months|year`, default `year`):
+**R11 Reports** (scope = projects the user is a member of, optional `project_id` must be one of them, `period` = `today|week|month|three_months|year`, default `year`):
 - `task_completion_rate` = completed tasks / all tasks in scope, in %.
 - `projects_completion_rate` = projects with status `done` / all projects in scope, in %.
 - `teams_activity_rate` = members who completed a task or wrote a comment in the period / all members in scope, in %.
@@ -101,6 +101,8 @@ Download only via authorized endpoint (R2). Deleting a project removes its store
 - Period windows end now: `week` = 7 days, `month` = 30, `three_months` = 90, `year` = 365 (UTC). The previous period is the same length right before.
   Rates are evaluated *as of the end of a window*: tasks `completed_at <= end` / tasks `created_at <= end`; projects `completed_at <= end` / projects `created_at <= end`.
   Monthly series use the calendar months touched by the window. `teams_activity_rate` uses the current members.
+- `today` runs from midnight UTC to now and compares against midnight yesterday to the same UTC time yesterday.
+  The series keep a single bucket labeled with the current month. `tasks_vs_deadline` and `worker_activity` use today's completions, and `projects_progress` stays cumulative up to now.
 - Each rate also returns `change_vs_last_period` (difference in percentage points against the previous period of the same length).
 - A **submitted report** stores `type` (`project_progress|task_performance|team_activity`), `note`, date range, optional project,
   and a JSON snapshot of the computed stats at submit time. Only its author can read it.
@@ -171,13 +173,13 @@ Stage tag in brackets = the stage that implements it.
 - `GET /projects/{project}/teams` [S3] — teams with members and each member's tasks done/total (Teams tab and dashboard widget).
 
 ### Tasks, comments, files
-- `GET /projects/{project}/tasks` · `POST /projects/{project}/tasks` [S3] — filters: `status, priority, assignee_id, assigned_to_me, search`
-- `GET /tasks` [S3] — across my projects; filters: `project_id, assigned_to_me, status, search`
+- `GET /projects/{project}/tasks` · `POST /projects/{project}/tasks` [S3] — list filters include `status, priority, assignee_id, assigned_to_me, team_id, search`
+- `GET /tasks` [S3] — across my projects, with `project_id, assigned_to_me, team_id, status, search`. For both lists, `team_id` matches at least one assignee whose membership in the task's project belongs to that team.
 - `GET /tasks/{task}` · `PUT /tasks/{task}` · `DELETE /tasks/{task}` [S3] — assignees via `assignee_ids[]`, reviewer via `reviewer_id`
 - `PATCH /tasks/{task}/status` [S3] — `status`, optional `progress` (R4)
 - `GET /tasks/{task}/comments` · `POST /tasks/{task}/comments` · `PUT /comments/{comment}` · `DELETE /comments/{comment}` [S3]
-- `GET /projects/{project}/files` · `POST /projects/{project}/files` (multipart `file`, `task_id?`) [S3]
-- `GET /files` [S3] (all my files; `project_id`, `search`) · `GET /files/{file}/download` · `DELETE /files/{file}` [S3]
+- `GET /projects/{project}/files` (`search`, `uploaded_by_me`) · `POST /projects/{project}/files` (multipart `file`, `task_id?`) [S3]
+- `GET /files` [S3] (files in my projects, filters `project_id`, `search`, `uploaded_by_me`) · `GET /files/{file}/download` · `DELETE /files/{file}` [S3]. For both lists, `uploaded_by_me=1` limits the results to the current user's uploads.
 
 ### Meetings, chat, notifications
 - `GET /meetings?from=&to=` · `POST /meetings` · `GET /meetings/{meeting}` · `PUT` · `DELETE` [S4]

@@ -105,6 +105,10 @@ class ProjectFileController extends Controller
      */
     private function filtered(Builder $query, ListFilesRequest $request): Builder
     {
+        if ($request->validated('uploaded_by_me')) {
+            $query->where('uploaded_by', $request->user()->id);
+        }
+
         if (($search = $request->validated('search')) !== null) {
             $query->where('original_name', 'like', Like::contains($search));
         }
