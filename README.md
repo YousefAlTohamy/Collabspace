@@ -36,6 +36,7 @@ Everything is organized around the **project**: being a member of a project is t
 - A project can only be marked `done` when all of its tasks are completed. Project progress is always computed, never stored.
 - Assignees and reviewers must be members of the task's project. Removing a member also removes them from the project's assignments.
 - Starting a direct chat requires a shared project. Losing membership removes access to that project's channel immediately.
+- Team channels are open to members of that team in the project. Every project has one project channel open to all its members.
 - Meetings are visible only to the organizer and participants. Project-linked meetings also require current membership. For a meeting without a project, invitees must share a project with the organizer.
 - Reports are computed from real task data (`created_at`, `completed_at`, `due_date`) for explicit time windows and compare each period with the previous one.
 

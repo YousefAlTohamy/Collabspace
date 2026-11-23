@@ -118,11 +118,16 @@ class DemoSeeder extends Seeder
         $teamIds = Team::query()->pluck('id', 'name');
         foreach ($members as $handle => [$team, $jobTitle]) {
             $user = $users[$handle];
+            $teamId = $teamIds->get($team);
             $project->members()->updateOrCreate(['user_id' => $user->id], [
-                'team_id' => $teamIds->get($team),
+                'team_id' => $teamId,
                 'job_title' => $jobTitle,
                 'role' => $user->id === $project->created_by ? ProjectRole::Leader : ProjectRole::Member,
             ]);
+
+            if ($teamId !== null) {
+                Conversation::ensureTeamChannel($project->id, $teamId);
+            }
         }
     }
 
@@ -202,7 +207,11 @@ class DemoSeeder extends Seeder
 
     private function createChat(Project $alpha, array $users, CarbonImmutable $now): void
     {
-        $channel = Conversation::query()->where('project_id', $alpha->id)->sole();
+        $channel = Conversation::query()->where('project_id', $alpha->id)->where('type', ConversationType::Project->value)->sole();
+        $teamChannels = Conversation::query()->where('project_id', $alpha->id)
+            ->where('type', ConversationType::Team->value)->with('team')->get()->keyBy('team.name');
+        $frontend = $teamChannels->get('Frontend');
+        $backend = $teamChannels->get('Backend');
         $direct = Conversation::query()->create([
             'type' => ConversationType::Direct,
             'user_one_id' => min($users['mohamed']->id, $users['sara']->id),
@@ -218,6 +227,11 @@ class DemoSeeder extends Seeder
             [$direct, 'mohamed', 'Could you bring two options to the design review?'],
             [$direct, 'sara', 'Yes, I will include the keyboard navigation flow.'],
             [$direct, 'mohamed', 'Thanks. We can compare them in the meeting.'],
+            [$frontend, 'ali', 'The mobile layout is ready for the next design pass.'],
+            [$frontend, 'ali', 'I added keyboard checks to the review checklist.'],
+            [$backend, 'mohanad', 'The API contract is ready for integration.'],
+            [$backend, 'khalid', 'The upload checks are passing on Sail.'],
+            [$backend, 'mohanad', 'I will review the report queries this afternoon.'],
         ];
         foreach ($messages as $index => [$conversation, $sender, $body]) {
             Message::factory()->for($conversation)->for($users[$sender], 'user')->create([

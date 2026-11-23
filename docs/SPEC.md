@@ -73,6 +73,9 @@ Download only via authorized endpoint (R2). Deleting a project removes its store
 **R8 Chat.**
 - Each project has exactly one **project channel** (conversation type `project`), created together with the project.
   Its participants are the project members, derived from membership (no participant rows). Losing membership = losing access immediately.
+- Each team that has at least one member in a project gets a **team channel** (conversation type `team`, unique per project and team). It is created the first time a member is placed in that team
+  (project creation, adding a member, changing a member's team). Its participants are the project members whose `team_id` equals the channel's team (derived; changing team or leaving the project removes access immediately).
+  Team channels are never deleted on their own; they disappear with the project.
 - **Direct** conversations are between exactly two users, unique per pair, get-or-create. Allowed only if the two users
   share at least one project (else 403).
 - A message needs a `body` (max 5000) or an attachment (same whitelist/limit as R7, stored privately). Only participants can read or post.
@@ -127,7 +130,7 @@ Enums are lowercase snake strings.
 - **task_assignees**: task_id, user_id — unique pair.
 - **task_comments**: task_id, user_id, body (max 2000).
 - **files**: project_id, task_id?, uploaded_by, original_name, path, mime_type, size.
-- **conversations**: type (`project|direct`), project_id? (unique when type=project), user_one_id?/user_two_id? (direct, stored as lower id first, unique pair).
+- **conversations**: type (`project|team|direct`), project_id? (project and team channels), team_id? (team channels only; unique per project and team, and one project channel per project), user_one_id?/user_two_id? (direct, stored as lower id first, unique pair).
 - **messages**: conversation_id, user_id, body?, attachment_path?, attachment_name?, attachment_mime?, attachment_size?
 - **meetings**: project_id?, created_by, title, starts_at, duration_minutes, meeting_url?, note?, summary?, reminder_sent_at?
 - **meeting_participants**: meeting_id, user_id — unique pair.
@@ -174,7 +177,7 @@ Stage tag in brackets = the stage that implements it.
 - `GET /meetings?from=&to=` · `POST /meetings` · `GET /meetings/{meeting}` · `PUT` · `DELETE` [S4]
 - `GET /meetings/{meeting}/transcript?q=` · `POST /meetings/{meeting}/transcript` [S4]
 - `POST /meetings/{meeting}/summary/generate` [S5]
-- `GET /conversations` [S4] — inbox: project channels + direct chats, each with last message, ordered by last activity
+- `GET /conversations` [S4] — inbox: project channels + team channels + direct chats, each with last message, ordered by last activity
 - `POST /conversations/direct` [S4] — `user_id`
 - `GET /conversations/{conversation}/messages` · `POST /conversations/{conversation}/messages` [S4]
 - `GET /messages/{message}/attachment` [S4]
@@ -198,6 +201,6 @@ Stage tag in brackets = the stage that implements it.
 
 ## 7. Out of scope for v1 (do not build)
 
-Daily status updates, table/timeline task views, chat threads/calls/realtime, team channels, file versioning, workflows,
+Daily status updates, table/timeline task views, chat threads/calls/realtime, file versioning, workflows,
 invites by email, email change, recent searches (client side), "hours worked", language switching (client side),
 soft deletes, multi-tenant workspaces.

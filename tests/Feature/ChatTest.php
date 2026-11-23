@@ -28,7 +28,7 @@ class ChatTest extends TestCase
             'end_date' => today()->addDay()->toDateString(),
         ])->assertCreated()->json('data.id');
 
-        $channel = Conversation::query()->where('project_id', $projectId)->sole();
+        $channel = Conversation::query()->where('project_id', $projectId)->where('type', 'project')->sole();
         $this->assertSame('project', $channel->type->value);
         $this->assertNull($channel->user_one_id);
         $this->assertNull($channel->user_two_id);
@@ -161,6 +161,6 @@ class ChatTest extends TestCase
 
     private function projectChannel(Project $project): Conversation
     {
-        return Conversation::query()->where('project_id', $project->id)->sole();
+        return Conversation::query()->where('project_id', $project->id)->where('type', 'project')->sole();
     }
 }
