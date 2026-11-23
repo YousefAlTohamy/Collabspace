@@ -116,9 +116,11 @@ On Windows (Git Bash / PowerShell), where the Sail script does not run, use Dock
 ```bash
 docker compose up -d
 docker compose exec laravel.test php artisan key:generate
-docker compose exec laravel.test php artisan migrate:fresh --seed
+docker compose exec -u sail laravel.test php artisan migrate --seed
 docker compose exec laravel.test php artisan storage:link
 ```
+
+Run the seed as the `sail` user so the API can read the seeded private files.
 
 The API is then available at `http://localhost:8000/api/v1` and emails (password reset) arrive in Mailpit at `http://localhost:8025`.
 If port 8000 is busy, update `APP_PORT` and `APP_URL` in `.env`.
@@ -136,6 +138,7 @@ Run the scheduler worker with `docker compose exec laravel.test php artisan sche
 | `APP_URL`, `FRONTEND_URL` | API URL and comma-separated frontend origins for CORS. The first origin is used for password reset links. |
 | `DB_*` | MySQL connection (preconfigured for Sail) |
 | `MAIL_*` | Mail transport (Mailpit in development) |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID used to verify ID tokens. Google sign-in returns `503` when this is empty. |
 | `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT` | Any OpenAI-compatible chat-completions provider. Without them the AI endpoints answer `503` |
 
 Set `APP_DEBUG=false` outside local development.
@@ -178,11 +181,11 @@ Import [`postman/Collabspace.postman_collection.json`](postman/Collabspace.postm
 
 ## Endpoint overview
 
-All 63 API routes live under `/api/v1`. Only `auth/register`, `auth/login`, `auth/forgot-password` and `auth/reset-password` are public.
+All 64 API routes live under `/api/v1`. Only `auth/register`, `auth/login`, `auth/google`, `auth/forgot-password` and `auth/reset-password` are public.
 
 | Area | Endpoints |
 |---|---|
-| Auth | `POST /auth/register`, `/auth/login`, `/auth/logout`, `/auth/forgot-password`, `/auth/reset-password` |
+| Auth | `POST /auth/register`, `/auth/login`, `POST /auth/google`, `/auth/logout`, `/auth/forgot-password`, `/auth/reset-password` |
 | Profile | `GET/PUT /me`, `POST /me/avatar`, `PUT /me/password`, `GET /me/stats`, `GET /users?search=` |
 | Projects | `GET/POST /projects`, `GET/PUT/DELETE /projects/{project}`, members (`GET/POST/PUT/DELETE /projects/{project}/members…`), `GET /projects/{project}/teams`, `GET /teams` |
 | Tasks | `GET/POST /projects/{project}/tasks`, `GET /tasks`, `GET/PUT/DELETE /tasks/{task}`, `PATCH /tasks/{task}/status` |
@@ -199,5 +202,6 @@ All 63 API routes live under `/api/v1`. Only `auth/register`, `auth/login`, `aut
 - **No realtime chat**: messages are REST with cursor pagination (clients poll). WebSockets would add infrastructure that the first version does not need.
 - **Meetings store a link** (Meet, Zoom, Jitsi...) instead of hosting video. Transcript entries are stored as data; the summary is generated from them by the AI provider.
 - **Email is read-only** in the profile: changing it safely needs a verification flow.
-- Not included: Google sign-in (needs OAuth client credentials), chat threads and calls, file versioning, daily status updates, table/timeline task views.
+- Accounts created with Google have a random password that users can replace through the password-reset flow. Signing in with Google to an existing password account links it only for @gmail.com or Workspace addresses and replaces that account's password, because email addresses are not verified at registration.
+- Not included: chat threads and calls, file versioning, daily status updates, table/timeline task views.
   The full list is in `docs/SPEC.md` (section 7).

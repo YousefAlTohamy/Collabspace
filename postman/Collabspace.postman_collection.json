@@ -304,6 +304,57 @@
               }
             }
           ]
+        },
+        {
+          "name": "Login with Google (needs a real Google ID token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "The frontend obtains the ID token from Google Sign-In and sends it here. The server verifies it (signature, issuer, audience, expiry, verified email).",
+            "url": {
+              "raw": "{{baseUrl}}/auth/google",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "google"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_token\": \"<Google ID token from the frontend sign-in>\",\n  \"remember\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 with a real Google ID token, 401 with the placeholder, 503 if Google sign-in is not configured\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 401, 503]); });",
+                  "if (pm.response.code === 200) { pm.collectionVariables.set(\"token\", pm.response.json().token); }"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
