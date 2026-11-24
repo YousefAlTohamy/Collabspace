@@ -9,6 +9,7 @@ use App\Models\ProjectMember;
 use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -245,6 +246,33 @@ class TasksTest extends TestCase
         $this->getJson('/api/v1/tasks?team_id='.$backend->id.'&project_id='.$foreignProject->id)->assertForbidden();
         $this->getJson('/api/v1/projects/'.$foreignProject->id.'/tasks?team_id='.$backend->id)->assertForbidden();
         $this->getJson('/api/v1/tasks?team_id=unknown')->assertUnprocessable()->assertJsonValidationErrors('team_id');
+    }
+
+    public function test_priority_and_overdue_filters_combine_on_both_task_lists(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-04-15 00:00:01', 'UTC'));
+        $pastDue = ['due_date' => '2026-04-14'];
+        $highPriority = ['priority' => 'high'];
+        $highOverdue = Task::factory()->for($this->project)->create($highPriority + $pastDue);
+        $lowOverdue = Task::factory()->for($this->project)->create(['priority' => 'low'] + $pastDue);
+        Task::factory()->for($this->project)->create($highPriority + ['due_date' => '2026-04-15']);
+        Task::factory()->for($this->project)->create($highPriority + ['due_date' => null]);
+        Task::factory()->for($this->project)->completed()->create($highPriority + $pastDue);
+        $foreign = Task::factory()->create($highPriority + $pastDue);
+
+        $this->actingAs($this->leader, 'sanctum');
+        foreach (['/api/v1/tasks', '/api/v1/projects/'.$this->project->id.'/tasks'] as $uri) {
+            $overdue = $this->getJson($uri.'?overdue=1')->assertOk()->assertJsonCount(2, 'data');
+            $this->assertEqualsCanonicalizing([$highOverdue->id, $lowOverdue->id], array_column($overdue->json('data'), 'id'));
+
+            $this->getJson($uri.'?priority=high&overdue=1')->assertOk()->assertJsonCount(1, 'data')
+                ->assertJsonPath('data.0.id', $highOverdue->id)->assertJsonPath('data.0.is_overdue', true);
+            $this->getJson($uri.'?priority=high&overdue=0')->assertOk()->assertJsonCount(4, 'data');
+            $this->getJson($uri.'?priority=urgent&overdue=maybe')->assertUnprocessable()
+                ->assertJsonValidationErrors(['priority', 'overdue']);
+        }
+
+        $this->getJson('/api/v1/tasks?priority=high&overdue=1&project_id='.$foreign->project_id)->assertForbidden();
     }
 
     public function test_show_update_delete_permissions(): void

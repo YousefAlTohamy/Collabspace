@@ -10,6 +10,7 @@ use App\Http\Requests\StoreMessageRequest;
 use App\Http\Resources\MessageResource;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Support\Like;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
@@ -20,10 +21,15 @@ class MessageController extends Controller
 {
     public function index(ListMessagesRequest $request, Conversation $conversation): AnonymousResourceCollection
     {
-        $messages = $conversation->messages()->with('user')->latest('id')
-            ->cursorPaginate((int) ($request->validated('per_page') ?? 30));
+        $messages = $conversation->messages()->with('user')->latest('id');
 
-        return MessageResource::collection($messages)->preserveQuery();
+        if (($search = $request->validated('q')) !== null) {
+            $messages->where('body', 'like', Like::contains($search));
+        }
+
+        return MessageResource::collection(
+            $messages->cursorPaginate((int) ($request->validated('per_page') ?? 30)),
+        )->preserveQuery();
     }
 
     public function store(StoreMessageRequest $request, Conversation $conversation, SendChatMessage $action): JsonResponse

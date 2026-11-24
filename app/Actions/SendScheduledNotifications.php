@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
-use App\Enums\TaskStatus;
 use App\Models\Meeting;
 use App\Models\ProjectMember;
 use App\Models\Task;
@@ -29,9 +28,7 @@ class SendScheduledNotifications
         $meetings = Meeting::query()->whereNull('reminder_sent_at')
             ->where('starts_at', '>', $now)
             ->where('starts_at', '<=', $now->addMinutes(30));
-        $tasks = Task::query()->whereNull('overdue_notified_at')
-            ->where('status', '!=', TaskStatus::Completed->value)
-            ->where('due_date', '<', $today->toDateString());
+        $tasks = Task::query()->whereNull('overdue_notified_at')->overdue($today);
 
         return [
             'meeting_reminders' => $this->sendInChunks(

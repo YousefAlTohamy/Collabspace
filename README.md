@@ -52,6 +52,7 @@ See [`docs/SPEC.md`](docs/SPEC.md) for all rules (R1–R15), the data model and 
 - **Google sign-in** verifies the ID token signature and claims, checks whether Google is authoritative for an existing account's email before linking it, and rate-limits signing-key refreshes (R15).
 - **Project files and chat attachments**: extension whitelist and real content (MIME) check, 10 MB limit, random names, private disk, no storage path in responses,
   downloads only through an authorized endpoint with `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`.
+  Word, Excel and PowerPoint uploads in modern Office formats also require the expected manifest and main archive part.
 - **Input handling**: Form Requests everywhere, explicit `$fillable`, server-owned fields (`created_by`, `user_id`, ...) are never read from input,
   `LIKE` wildcards are escaped, meeting links must be `https`.
 - **Responses**: API Resources for models, other users' email/phone are never exposed, and errors are JSON without stack traces when `APP_DEBUG=false`.
@@ -194,6 +195,8 @@ Import [`postman/Collabspace.postman_collection.json`](postman/Collabspace.postm
 The Quick demo uses password sign-in and works with the seeded database alone.
 
 Enable `uploaded_by_me=1` in **List all my files** or **List project files** to see your own uploads in projects you can access.
+
+Enable `priority` and `overdue=1` in either task list to find open tasks whose UTC due date has passed. In **List messages (newest first, cursor)**, enable `q` to search message text within the selected conversation.
 
 ## Endpoint overview
 

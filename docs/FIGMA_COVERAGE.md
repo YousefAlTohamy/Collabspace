@@ -61,7 +61,7 @@ Members see and change what belongs to their projects; leaders manage the projec
 | Add task inside a column | `POST /projects/{project}/tasks` with `status` | ✅ |
 | Create task overlay (name, dates, guests, files) | same endpoint with `assignee_ids[]`; files via `POST /projects/{project}/files` with `task_id` | ✅ |
 | Reviewer, priority, progress bar, comments counter, due date | `reviewer_id`, `priority`, `progress`, `comments_count`, `due_date` (+ `is_overdue`) | ✅ |
-| Tasks page: project filter, "My tasks" | `GET /tasks?project_id=&assigned_to_me=&status=&search=` | ✅ |
+| Tasks page: project filter, "My tasks" | `GET /tasks?project_id=&assigned_to_me=&status=&priority=&overdue=&search=` | ✅ |
 | "UI/UX tasks", "Frontend tasks" … filters | `GET /tasks?team_id=` or `GET /projects/{project}/tasks?team_id=` | ✅ matches an assignee's team in the task's own project |
 | Task comments | `GET/POST /tasks/{task}/comments`, `PUT/DELETE /comments/{comment}` | ✅ |
 
@@ -73,7 +73,8 @@ Members see and change what belongs to their projects; leaders manage the projec
 | Project chats (public channel) | one channel per project in `GET /conversations` | ✅ members only |
 | Team channels (Frontend, Backend…) | `type: team` entries in `GET /conversations` | ✅ one channel per team in each project, open to the members of that team |
 | Messages, attachments | `GET/POST /conversations/{conversation}/messages`, `GET /messages/{message}/attachment` | ✅ same upload rules as project files |
-| Threads (#Screen edit), voice/video call icons, search in chat | — | ❌ out of scope; no realtime in v1 (clients poll with cursor pagination) |
+| Search in chat | `GET /conversations/{conversation}/messages?q=` | ✅ searches text within the selected conversation |
+| Threads (#Screen edit), voice/video call icons | — | ❌ out of scope in v1 (clients poll with cursor pagination) |
 
 ## Meetings
 

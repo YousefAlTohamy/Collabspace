@@ -145,6 +145,10 @@ class TaskController extends Controller
             $query->whereHas('assignees', fn (Builder $q) => $q->where('user_id', $request->user()->id));
         }
 
+        if ($request->validated('overdue')) {
+            $query->overdue(today('UTC'));
+        }
+
         if (($search = $request->validated('search')) !== null) {
             $query->where('title', 'like', Like::contains($search));
         }
