@@ -74,6 +74,20 @@ class ProjectsTest extends TestCase
         $this->assertStringNotContainsString('email', $response->getContent());
     }
 
+    public function test_project_list_limits_member_preview_for_each_project(): void
+    {
+        $owner = User::factory()->create();
+        $projects = Project::factory()->count(2)->for($owner, 'creator')->create();
+        foreach ($projects as $project) {
+            ProjectMember::factory()->count(5)->for($project)->create();
+        }
+
+        $this->actingAs($owner, 'sanctum')->getJson('/api/v1/projects')->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.members_count', 6)->assertJsonCount(4, 'data.0.members')
+            ->assertJsonPath('data.1.members_count', 6)->assertJsonCount(4, 'data.1.members');
+    }
+
     public function test_list_filters_by_status_and_search(): void
     {
         $me = User::factory()->create();

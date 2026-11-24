@@ -31,7 +31,7 @@ class TaskCommentController extends Controller
             ->orderBy('id')
             ->paginate((int) ($request->validated('per_page') ?? 15));
 
-        return TaskCommentResource::collection($comments);
+        return TaskCommentResource::collection($comments)->withQuery($request->validated());
     }
 
     /**

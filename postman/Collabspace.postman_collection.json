@@ -836,6 +836,104 @@
           ]
         },
         {
+          "name": "Save my daily status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Creates or replaces the current user's update for today in UTC. Current project membership is required.",
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/daily-statuses/today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "daily-statuses",
+                "today"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"progress\": \"Reviewed the dashboard filters.\",\n  \"next_steps\": \"Test the report drill-down.\",\n  \"blockers\": \"Waiting for feedback on the mockups.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Includes the saved daily status\", function () { pm.expect(pm.response.json().data.date).to.match(/^\\d{4}-\\d{2}-\\d{2}$/); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List daily statuses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "description": "Defaults to today in UTC. Current leaders see all project updates for the date and other members see their own.",
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/daily-statuses?date=2026-11-24&per_page=15",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "daily-statuses"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-11-24",
+                  "disabled": true
+                },
+                {
+                  "key": "per_page",
+                  "value": "15",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Returns a paginated list\", function () { pm.expect(pm.response.json().data).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Project teams tab",
           "request": {
             "method": "GET",
@@ -1823,9 +1921,9 @@
                 "value": "application/json"
               }
             ],
-            "description": "Project channels + direct chats. Each project has one channel, created with the project.",
+            "description": "Project channels, team channels, and direct chats. Enable q to search visible conversations by project name, team name, or other participant name.",
             "url": {
-              "raw": "{{baseUrl}}/conversations?per_page=15",
+              "raw": "{{baseUrl}}/conversations?q=Alpha&per_page=15",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1833,6 +1931,11 @@
                 "conversations"
               ],
               "query": [
+                {
+                  "key": "q",
+                  "value": "Alpha",
+                  "disabled": true
+                },
                 {
                   "key": "per_page",
                   "value": "15",

@@ -3,6 +3,7 @@
 use App\Http\Controllers\AiController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\DailyStatusController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\MeetingController;
@@ -53,6 +54,8 @@ Route::prefix('v1')->group(function (): void {
         Route::put('/projects/{project}', [ProjectController::class, 'update'])->whereNumber('project');
         Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->whereNumber('project');
         Route::get('/projects/{project}/teams', [ProjectController::class, 'teams'])->whereNumber('project');
+        Route::get('/projects/{project}/daily-statuses', [DailyStatusController::class, 'index'])->whereNumber('project');
+        Route::put('/projects/{project}/daily-statuses/today', [DailyStatusController::class, 'update'])->whereNumber('project');
 
         Route::get('/projects/{project}/members', [ProjectMemberController::class, 'index'])->whereNumber('project');
         Route::post('/projects/{project}/members', [ProjectMemberController::class, 'store'])->whereNumber('project');

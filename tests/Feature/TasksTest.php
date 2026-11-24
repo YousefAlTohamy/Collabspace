@@ -275,6 +275,26 @@ class TasksTest extends TestCase
         $this->getJson('/api/v1/tasks?priority=high&overdue=1&project_id='.$foreign->project_id)->assertForbidden();
     }
 
+    public function test_task_pagination_links_keep_project_and_overdue_filters(): void
+    {
+        $past = ['due_date' => today('UTC')->subDay()->toDateString()];
+        $older = Task::factory()->for($this->project)->create($past);
+        Task::factory()->for($this->project)->create(['due_date' => today('UTC')->toDateString()]);
+        $newer = Task::factory()->for($this->project)->create($past);
+        Task::factory()->for(Project::factory()->for($this->leader, 'creator'))->create($past);
+
+        $this->actingAs($this->leader, 'sanctum');
+        foreach ([
+            '/api/v1/projects/'.$this->project->id.'/tasks?overdue=1&per_page=1',
+            '/api/v1/tasks?project_id='.$this->project->id.'&overdue=1&per_page=1',
+        ] as $uri) {
+            $first = $this->getJson($uri)->assertOk()->assertJsonPath('data.0.id', $newer->id);
+            $this->getJson($first->json('links.next'))->assertOk()->assertJsonCount(1, 'data')
+                ->assertJsonPath('data.0.id', $older->id)->assertJsonPath('meta.total', 2)
+                ->assertJsonPath('meta.per_page', 1)->assertJsonPath('links.next', null);
+        }
+    }
+
     public function test_show_update_delete_permissions(): void
     {
         $creator = $this->member();

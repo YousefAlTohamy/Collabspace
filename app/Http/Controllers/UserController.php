@@ -25,8 +25,9 @@ class UserController extends Controller
                     ->orWhere('email', $search);
             })
             ->orderBy('name')
+            ->orderBy('id')
             ->paginate($request->validated('per_page', 15));
 
-        return UserSummaryResource::collection($users);
+        return UserSummaryResource::collection($users)->withQuery($request->validated());
     }
 }

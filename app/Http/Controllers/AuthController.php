@@ -13,7 +13,9 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class AuthController extends Controller
 {
@@ -55,7 +57,11 @@ class AuthController extends Controller
 
     public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
     {
-        Password::sendResetLink($request->validated());
+        try {
+            Password::sendResetLink($request->validated());
+        } catch (TransportExceptionInterface) {
+            Log::warning('Password reset email could not be delivered.');
+        }
 
         // Always the same answer, whether or not the email exists.
         return response()->json([

@@ -37,7 +37,7 @@ class ProjectResource extends JsonResource
             'members_count' => $this->whenCounted('members'),
             'files_count' => $this->whenCounted('files'),
             'progress_percent' => $total > 0 ? (int) round($completed / $total * 100) : 0,
-            'members' => $this->whenLoaded('members', fn () => ProjectMemberResource::collection($this->members->take(4))),
+            'members' => ProjectMemberResource::collection($this->whenLoaded('members')),
         ];
     }
 }

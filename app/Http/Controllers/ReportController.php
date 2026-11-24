@@ -45,7 +45,7 @@ class ReportController extends Controller
             ->with('project')->latest()->orderByDesc('id')
             ->paginate((int) ($request->validated('per_page') ?? 15));
 
-        return ReportResource::collection($reports);
+        return ReportResource::collection($reports)->withQuery($request->validated());
     }
 
     public function show(Report $report): ReportResource

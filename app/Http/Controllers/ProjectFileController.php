@@ -28,9 +28,10 @@ class ProjectFileController extends Controller
     {
         $files = $project->files()
             ->with('uploader')
-            ->orderByDesc('created_at');
+            ->orderByDesc('created_at')->orderByDesc('id');
 
-        return FileResource::collection($this->filtered($files, $request)->paginate((int) ($request->validated('per_page') ?? 15)));
+        return FileResource::collection($this->filtered($files, $request)->paginate((int) ($request->validated('per_page') ?? 15)))
+            ->withQuery($request->validated());
     }
 
     /**
@@ -43,14 +44,15 @@ class ProjectFileController extends Controller
             // R2: only files of projects I am a member of.
             ->whereHas('project', fn (Builder $project) => $project->visibleTo($user))
             ->with('uploader')
-            ->orderByDesc('created_at');
+            ->orderByDesc('created_at')->orderByDesc('id');
 
         if (($projectId = $request->validated('project_id')) !== null) {
             $project = Project::findVisibleOrFail($user, $projectId);
             $query->where('project_id', $project->id);
         }
 
-        return FileResource::collection($this->filtered($query, $request)->paginate((int) ($request->validated('per_page') ?? 15)));
+        return FileResource::collection($this->filtered($query, $request)->paginate((int) ($request->validated('per_page') ?? 15)))
+            ->withQuery($request->validated());
     }
 
     /**

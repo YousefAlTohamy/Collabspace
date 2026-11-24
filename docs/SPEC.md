@@ -61,7 +61,7 @@ When a member is removed from a project, they are also removed from the assignee
 - `progress` (0..100) is a manual field for in-progress tasks; it is forced to 100 on completion.
 
 **R5 Project progress.** `progress_percent = completed tasks / total tasks * 100` (0 when no tasks). Computed, never stored.
-Project `status` is `active` or `done`, set by a leader. Marking `done` requires every task to be `completed` (or no tasks) => else 422.
+Project `status` is `active` or `done`, set by a leader. Marking `done` requires every task to be `completed` (or no tasks). A leader must reactivate a `done` project before anyone can add or reopen a task. Invalid transitions return 422. Project closure, task creation, and task status changes lock the same project row before checking these rules.
 
 **R6 Dates.** `end_date >= start_date` for projects. `due_date >= start_date` for tasks (when both given).
 
@@ -81,6 +81,7 @@ Download only via authorized endpoint (R2). Deleting a project removes its store
   share at least one project (else 403).
 - A message needs a `body` (max 5000) or an attachment (same whitelist/limit as R7, stored privately). Only participants can read or post.
 - Messages are returned newest-first with cursor pagination. Optional `q` (2–200 characters) searches message bodies within the authorized conversation and treats LIKE wildcards literally. No realtime in v1 (clients poll).
+- Inbox `q` (2–200 characters) matches a project name, a team name, or the other participant's name in a visible conversation. It also treats LIKE wildcards literally.
 
 **R9 Meetings.**
 - A meeting has `title`, `starts_at`, `duration_minutes` (15..480), optional `meeting_url` (https only), optional `note` (the goal), optional `project_id`.
@@ -108,10 +109,10 @@ Download only via authorized endpoint (R2). Deleting a project removes its store
 - A **submitted report** stores `type` (`project_progress|task_performance|team_activity`), `note`, date range, optional project,
   and a JSON snapshot of the computed stats at submit time. Only its author can read it.
 
-**R12 AI assistant.** One thread per user. Each new message sends the system prompt + the last 20 messages to an OpenAI-compatible
+**R12 AI assistant.** One thread per user. Each new message sends the system prompt, the user's new message, and up to the last 20 messages to an OpenAI-compatible
 chat-completions endpoint configured by env (`AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`). No user/project data is added to the prompt.
 Message max 4000 chars. Rate limit 20/min per user. If not configured or the provider fails => 503 `{ "message": "AI assistant is unavailable." }`
-and the user message is not stored. Tests fake the HTTP call.
+and the user message is not stored. History is capped at 2,000 characters per entry and 12,000 characters total, keeping the most recent entries within that limit. Tests fake the HTTP call.
 
 **R13 Dashboard** (all for the current user): task counts by status for tasks assigned to the user (`pending` = `todo`), `completion_rate`
 (= completed / all assigned), `completed_this_month` and `completed_last_month`; active projects (max 5) with progress and task counts;
@@ -126,6 +127,8 @@ Matching order: (1) a user with the same `google_id` (the token's `sub`); (2) a 
 When an existing account is linked and its email was never verified (password registration has no verification), its password is replaced by a random one and its tokens are revoked, because someone else may have registered the address first;
 (3) otherwise a new user (name from the token, random password, `email_verified_at` set). An account already linked to a different Google id is rejected (409). Nothing from the token other than name, email and `sub` is stored; the avatar URL is ignored.
 
+**R16 Daily status.** A current project member can write one update per UTC day for themselves. It includes progress, next steps, and optional blockers, each at most 2,000 characters. Saving again on the same day replaces the same record. Prior dates are read-only. Current leaders can list everyone's updates for a day, and other current members can list their own. Losing project membership revokes both read and write access, and leaders can still see recorded updates. Deleting the project removes its updates.
+
 ## 4. Data model
 
 Auto-increment bigint ids, `created_at/updated_at` everywhere, FKs with sensible `cascadeOnDelete`, indexes on every FK and on common filters.
@@ -135,6 +138,7 @@ Enums are lowercase snake strings.
 - **teams**: name — seeded: UI/UX, Frontend, Backend, Marketing.
 - **projects**: name, description?, type? (free text e.g. "SaaS"), priority (`low|medium|high`), status (`active|done`, default `active`), start_date, end_date, created_by (user), completed_at? (set when status becomes `done`, cleared when it goes back to `active`).
 - **project_members**: project_id, user_id, role (`leader|member`), team_id?, job_title? — unique(project_id, user_id).
+- **daily_statuses**: project_id, user_id, status_date (UTC), progress, next_steps, blockers? — unique(project_id, status_date, user_id).
 - **tasks**: project_id, title, description?, status, priority, progress (0..100, default 0), start_date?, due_date?, reviewer_id?, created_by, completed_at?, overdue_notified_at?
 - **task_assignees**: task_id, user_id — unique pair.
 - **task_comments**: task_id, user_id, body (max 2000).
@@ -172,6 +176,8 @@ Stage tag in brackets = the stage that implements it.
 - `PUT /projects/{project}` · `DELETE /projects/{project}` [S2]
 - `GET /projects/{project}/members` · `POST` · `PUT /projects/{project}/members/{user}` · `DELETE ...` [S2]
 - `GET /projects/{project}/teams` [S3] — teams with members and each member's tasks done/total (Teams tab and dashboard widget).
+- `GET /projects/{project}/daily-statuses?date=&per_page=` — updates for the selected `YYYY-MM-DD` date, default today UTC. Leaders see all and members see their own.
+- `PUT /projects/{project}/daily-statuses/today` — `progress`, `next_steps`, `blockers?`. Saves the caller's update for today (200).
 
 ### Tasks, comments, files
 - `GET /projects/{project}/tasks` · `POST /projects/{project}/tasks` [S3] — list filters include `status, priority, assignee_id, assigned_to_me, team_id, overdue, search`
@@ -187,7 +193,7 @@ Stage tag in brackets = the stage that implements it.
 - `GET /meetings?from=&to=` · `POST /meetings` · `GET /meetings/{meeting}` · `PUT` · `DELETE` [S4]
 - `GET /meetings/{meeting}/transcript?q=` · `POST /meetings/{meeting}/transcript` [S4]
 - `POST /meetings/{meeting}/summary/generate` [S5]
-- `GET /conversations` [S4] — inbox: project channels + team channels + direct chats, each with last message, ordered by last activity
+- `GET /conversations?q=` [S4] — inbox: project channels + team channels + direct chats, each with last message, ordered by last activity. The optional search matches conversation names (R8).
 - `POST /conversations/direct` [S4] — `user_id`
 - `GET /conversations/{conversation}/messages?q=` · `POST /conversations/{conversation}/messages` [S4]
 - `GET /messages/{message}/attachment` [S4]
@@ -200,7 +206,7 @@ Stage tag in brackets = the stage that implements it.
 
 ## 6. Cross-cutting conventions
 
-- **Success shape**: API Resources (`{ "data": ... }`); paginated lists use Laravel's `data/links/meta`.
+- **Success shape**: API Resources (`{ "data": ... }`). Paginated lists use Laravel's `data/links/meta` and keep the selected filters and page size in navigation links.
 - **Errors**: 401 unauthenticated, 403 forbidden, 404 not found, 422 `{message, errors}`, 429 throttled, 503 AI unavailable.
   Always JSON for `/api/*`. No stack traces when `APP_DEBUG=false`.
 - **Rate limits**: login 5/min per email+IP; register 5/min per IP; forgot/reset password 3/min per IP;
@@ -211,6 +217,6 @@ Stage tag in brackets = the stage that implements it.
 
 ## 7. Out of scope for v1 (do not build)
 
-Daily status updates, table/timeline task views, chat threads/calls/realtime, file versioning, workflows,
+Table/timeline task views, chat threads/calls/realtime, file versioning, workflows,
 invites by email, email change, recent searches (client side), "hours worked", language switching (client side),
 soft deletes, multi-tenant workspaces.
