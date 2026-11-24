@@ -18,6 +18,7 @@ class ListMessagesRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'q' => ['nullable', 'string', 'min:2', 'max:200'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
             'cursor' => ['bail', 'nullable', 'string', 'max:256', function (string $attribute, string $value, Closure $fail): void {
                 $cursor = Cursor::fromEncoded($value)?->toArray() ?? [];

@@ -104,6 +104,32 @@ class ChatTest extends TestCase
         $this->getJson($uri.'?cursor=invalid')->assertUnprocessable()->assertJsonValidationErrors('cursor');
     }
 
+    public function test_message_search_is_literal_and_scoped_to_the_authorized_conversation(): void
+    {
+        $project = Project::factory()->create();
+        $conversation = $this->projectChannel($project);
+        $uri = "/api/v1/conversations/{$conversation->id}/messages";
+        $search = $uri.'?'.http_build_query(['q' => '100%_done', 'per_page' => 1]);
+
+        $older = Message::factory()->for($conversation)->create(['body' => 'Draft is 100%_done']);
+        Message::factory()->for($conversation)->create(['body' => 'Draft is 100X_done']);
+        Message::factory()->for($conversation)->create(['body' => 'Draft is 100%Xdone']);
+        $latest = Message::factory()->for($conversation)->create(['body' => 'Final is 100%_done']);
+        Message::factory()->for($this->projectChannel(Project::factory()->create()))
+            ->create(['body' => 'Another project is 100%_done']);
+
+        $this->getJson($search)->assertUnauthorized();
+        $this->actingAs(User::factory()->create(), 'sanctum')->getJson($search)->assertForbidden();
+
+        $first = $this->actingAs($project->creator, 'sanctum')->getJson($search)->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $latest->id);
+        $this->getJson($first->json('links.next'))->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $older->id)
+            ->assertJsonPath('links.next', null);
+        $this->getJson($uri.'?q=x')->assertUnprocessable()->assertJsonValidationErrors('q');
+        $this->getJson($uri.'?q='.str_repeat('x', 201))->assertUnprocessable()->assertJsonValidationErrors('q');
+    }
+
     public function test_inbox_shows_only_my_conversations_in_activity_order(): void
     {
         $project = Project::factory()->create();

@@ -1119,9 +1119,9 @@
                 "value": "application/json"
               }
             ],
-            "description": "Enable team_id to match tasks assigned to a member of that team in this project. Pick an ID from List teams.",
+            "description": "Enable team_id to match tasks assigned to a member of that team in this project. Enable overdue=1 for open tasks due before today UTC.",
             "url": {
-              "raw": "{{baseUrl}}/projects/{{projectId}}/tasks?status=todo&priority=high&team_id={{teamId}}&assigned_to_me=1&search=wire&per_page=50",
+              "raw": "{{baseUrl}}/projects/{{projectId}}/tasks?status=todo&priority=high&team_id={{teamId}}&assigned_to_me=1&overdue=1&search=wire&per_page=50",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1148,6 +1148,11 @@
                 },
                 {
                   "key": "assigned_to_me",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "overdue",
                   "value": "1",
                   "disabled": true
                 },
@@ -1186,9 +1191,9 @@
                 "value": "application/json"
               }
             ],
-            "description": "Enable team_id to match a team on an assignee's membership in each task's project.",
+            "description": "Filter tasks in your projects by team_id, priority, status, assignment, or overdue=1 for open tasks due before today UTC.",
             "url": {
-              "raw": "{{baseUrl}}/tasks?project_id={{projectId}}&team_id={{teamId}}&assigned_to_me=1&status=todo&per_page=15",
+              "raw": "{{baseUrl}}/tasks?project_id={{projectId}}&team_id={{teamId}}&assigned_to_me=1&status=todo&priority=high&overdue=1&per_page=15",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1214,6 +1219,16 @@
                 {
                   "key": "status",
                   "value": "todo",
+                  "disabled": true
+                },
+                {
+                  "key": "priority",
+                  "value": "high",
+                  "disabled": true
+                },
+                {
+                  "key": "overdue",
+                  "value": "1",
                   "disabled": true
                 },
                 {
@@ -1619,7 +1634,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Max 10 MB. pdf, doc, docx, xls, xlsx, ppt, pptx, png, jpg, jpeg, webp, txt, csv, md, json, sql, zip. task_id (optional) must belong to the same project.",
+            "description": "Max 10 MB. pdf, doc, docx, xls, xlsx, ppt, pptx, png, jpg, jpeg, webp, txt, csv, md, json, sql, zip. Modern Office packages need the expected manifest and main part. task_id (optional) must belong to the same project.",
             "url": {
               "raw": "{{baseUrl}}/projects/{{projectId}}/files",
               "host": [
@@ -1897,9 +1912,9 @@
                 "value": "application/json"
               }
             ],
-            "description": "",
+            "description": "Enable q to search message bodies in this conversation. Keep q and per_page when following cursor links.",
             "url": {
-              "raw": "{{baseUrl}}/conversations/{{conversationId}}/messages?per_page=30&cursor=",
+              "raw": "{{baseUrl}}/conversations/{{conversationId}}/messages?q=review&per_page=30&cursor=",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1909,6 +1924,11 @@
                 "messages"
               ],
               "query": [
+                {
+                  "key": "q",
+                  "value": "review",
+                  "disabled": true
+                },
                 {
                   "key": "per_page",
                   "value": "30",
@@ -1993,7 +2013,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Select a file for the attachment field. Uses the project file whitelist and 10 MB limit. Saves attachmentMessageId for the download request.",
+            "description": "Select a file for the attachment field. Uses the project file whitelist, 10 MB limit, and modern Office package checks. Saves attachmentMessageId for the download request.",
             "url": {
               "raw": "{{baseUrl}}/conversations/{{conversationId}}/messages",
               "host": [

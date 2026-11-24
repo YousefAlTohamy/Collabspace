@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\Conversation;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -70,6 +71,43 @@ class ProjectFileContentTest extends TestCase
 
         $this->uploadBytes('report.docx', $word)->assertCreated();
         $this->uploadBytes('sheet.xlsx', $excel)->assertCreated();
+    }
+
+    public function test_accepts_a_minimal_powerpoint_as_a_project_file_and_chat_attachment(): void
+    {
+        $powerPoint = $this->zipBytes([
+            '[Content_Types].xml' => <<<'XML'
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                    <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                    <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+                </Types>
+                XML,
+            '_rels/.rels' => $this->officeRootRelationship('ppt/presentation.xml'),
+            'ppt/presentation.xml' => <<<'XML'
+                <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+                    <p:notesSz cx="6858000" cy="9144000"/>
+                </p:presentation>
+                XML,
+        ]);
+
+        $this->uploadBytes('slides.pptx', $powerPoint)->assertCreated()->assertJsonPath('data.name', 'slides.pptx');
+        $this->uploadBytes('slides.pptx', $powerPoint, $this->chatMessagesUri(), 'attachment')
+            ->assertCreated()->assertJsonPath('data.attachment.name', 'slides.pptx');
+    }
+
+    public function test_office_archives_require_the_manifest_and_a_nonempty_main_part(): void
+    {
+        $ordinaryZip = $this->zipBytes(['readme.txt' => 'Collabspace']);
+        foreach (['docx', 'xlsx', 'pptx'] as $extension) {
+            $this->uploadBytes('archive.'.$extension, $ordinaryZip)->assertUnprocessable()->assertJsonValidationErrors('file');
+        }
+
+        $missingManifest = $this->zipBytes(['word/document.xml' => '<document/>']);
+        $missingWorkbook = $this->zipBytes(['[Content_Types].xml' => '<Types/>', 'xl/workbook.xml' => '']);
+        $this->uploadBytes('report.docx', $missingManifest)->assertUnprocessable()->assertJsonValidationErrors('file');
+        $this->uploadBytes('workbook.xlsx', $missingWorkbook)->assertUnprocessable()->assertJsonValidationErrors('file');
+        $this->uploadBytes('archive.pptx', $ordinaryZip, $this->chatMessagesUri(), 'attachment')
+            ->assertUnprocessable()->assertJsonValidationErrors('attachment');
     }
 
     public function test_uses_real_png_content_to_check_the_extension(): void
@@ -139,7 +177,14 @@ class ProjectFileContentTest extends TestCase
         }
     }
 
-    private function uploadBytes(string $name, string $bytes): TestResponse
+    private function chatMessagesUri(): string
+    {
+        $channel = Conversation::query()->where('project_id', $this->project->id)->where('type', 'project')->sole();
+
+        return "/api/v1/conversations/{$channel->id}/messages";
+    }
+
+    private function uploadBytes(string $name, string $bytes, ?string $uri = null, string $field = 'file'): TestResponse
     {
         $file = tmpfile();
         $this->assertIsResource($file);
@@ -147,8 +192,8 @@ class ProjectFileContentTest extends TestCase
         try {
             $this->assertSame(strlen($bytes), fwrite($file, $bytes));
 
-            return $this->post("/api/v1/projects/{$this->project->id}/files", [
-                'file' => new UploadedFile(stream_get_meta_data($file)['uri'], $name, test: true),
+            return $this->post($uri ?? "/api/v1/projects/{$this->project->id}/files", [
+                $field => new UploadedFile(stream_get_meta_data($file)['uri'], $name, test: true),
             ], ['Accept' => 'application/json']);
         } finally {
             fclose($file);

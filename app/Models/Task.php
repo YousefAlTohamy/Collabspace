@@ -6,8 +6,10 @@ namespace App\Models;
 
 use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
+use Carbon\CarbonInterface;
 use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,6 +37,12 @@ class Task extends Model
             'completed_at' => 'datetime',
             'overdue_notified_at' => 'immutable_datetime',
         ];
+    }
+
+    public function scopeOverdue(Builder $query, CarbonInterface $today): Builder
+    {
+        return $query->where('status', '!=', TaskStatus::Completed->value)
+            ->where('due_date', '<', $today->toDateString());
     }
 
     public function project(): BelongsTo

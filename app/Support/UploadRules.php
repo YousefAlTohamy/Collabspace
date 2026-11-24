@@ -9,6 +9,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\File;
 use Symfony\Component\Mime\MimeTypes;
+use ZipArchive;
 
 class UploadRules
 {
@@ -33,6 +34,12 @@ class UploadRules
         'txt' => ['text/plain'],
     ];
 
+    private const OFFICE_MAIN_PARTS = [
+        'docx' => 'word/document.xml',
+        'xlsx' => 'xl/workbook.xml',
+        'pptx' => 'ppt/presentation.xml',
+    ];
+
     public static function sanitizeName(string $name): string
     {
         $name = basename(str_replace('\\', '/', $name));
@@ -50,18 +57,41 @@ class UploadRules
             function (string $attribute, UploadedFile $file, Closure $fail): void {
                 $extension = strtolower($file->getClientOriginalExtension());
                 $mime = $file->getMimeType() ?? '';
+                $mainPart = self::OFFICE_MAIN_PARTS[$extension] ?? null;
 
-                if (in_array(strtolower($mime), self::MIME_FALLBACKS[$extension] ?? [], true)) {
-                    return;
-                }
-
-                $mimeTypes = MimeTypes::getDefault();
-                $guessedExtension = $mimeTypes->getExtensions($mime)[0] ?? null;
-                if (! in_array($guessedExtension, self::ALLOWED_TYPES, true)
-                    || ! in_array($mime, $mimeTypes->getMimeTypes($extension), true)) {
+                if (! self::matchesMimeType($extension, $mime)
+                    || ($mainPart !== null && ! self::hasOfficeParts($file, $mainPart))) {
                     $fail('The file content must match its extension.');
                 }
             },
         ];
+    }
+
+    private static function matchesMimeType(string $extension, string $mime): bool
+    {
+        if (in_array(strtolower($mime), self::MIME_FALLBACKS[$extension] ?? [], true)) {
+            return true;
+        }
+
+        $mimeTypes = MimeTypes::getDefault();
+        $guessedExtension = $mimeTypes->getExtensions($mime)[0] ?? null;
+
+        return in_array($guessedExtension, self::ALLOWED_TYPES, true)
+            && in_array($mime, $mimeTypes->getMimeTypes($extension), true);
+    }
+
+    private static function hasOfficeParts(UploadedFile $file, string $mainPart): bool
+    {
+        $archive = new ZipArchive;
+        if ($archive->open($file->getPathname(), ZipArchive::RDONLY | ZipArchive::CHECKCONS) !== true) {
+            return false;
+        }
+
+        try {
+            return ($archive->statName('[Content_Types].xml')['size'] ?? 0) > 0
+                && ($archive->statName($mainPart)['size'] ?? 0) > 0;
+        } finally {
+            $archive->close();
+        }
     }
 }

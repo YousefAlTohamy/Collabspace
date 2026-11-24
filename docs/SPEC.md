@@ -67,6 +67,7 @@ Project `status` is `active` or `done`, set by a leader. Marking `done` requires
 
 **R7 Files.** A file belongs to one project and optionally to one task of the same project (422 otherwise).
 Max 10 MB. Allowed extensions (and matching MIME): `pdf, doc, docx, xls, xlsx, ppt, pptx, png, jpg, jpeg, webp, txt, csv, md, json, sql, zip`.
+`docx`, `xlsx` and `pptx` must also be readable ZIP packages containing nonempty `[Content_Types].xml` and their expected main part (`word/document.xml`, `xl/workbook.xml`, or `ppt/presentation.xml`).
 Anything else (php, html, svg, exe, sh, js...) is rejected (422). Stored on the private disk with a random name; original name kept in DB.
 Download only via authorized endpoint (R2). Deleting a project removes its stored files.
 
@@ -79,7 +80,7 @@ Download only via authorized endpoint (R2). Deleting a project removes its store
 - **Direct** conversations are between exactly two users, unique per pair, get-or-create. Allowed only if the two users
   share at least one project (else 403).
 - A message needs a `body` (max 5000) or an attachment (same whitelist/limit as R7, stored privately). Only participants can read or post.
-- Messages are returned newest-first with cursor pagination. No realtime in v1 (clients poll).
+- Messages are returned newest-first with cursor pagination. Optional `q` (2–200 characters) searches message bodies within the authorized conversation and treats LIKE wildcards literally. No realtime in v1 (clients poll).
 
 **R9 Meetings.**
 - A meeting has `title`, `starts_at`, `duration_minutes` (15..480), optional `meeting_url` (https only), optional `note` (the goal), optional `project_id`.
@@ -173,8 +174,9 @@ Stage tag in brackets = the stage that implements it.
 - `GET /projects/{project}/teams` [S3] — teams with members and each member's tasks done/total (Teams tab and dashboard widget).
 
 ### Tasks, comments, files
-- `GET /projects/{project}/tasks` · `POST /projects/{project}/tasks` [S3] — list filters include `status, priority, assignee_id, assigned_to_me, team_id, search`
-- `GET /tasks` [S3] — across my projects, with `project_id, assigned_to_me, team_id, status, search`. For both lists, `team_id` matches at least one assignee whose membership in the task's project belongs to that team.
+- `GET /projects/{project}/tasks` · `POST /projects/{project}/tasks` [S3] — list filters include `status, priority, assignee_id, assigned_to_me, team_id, overdue, search`
+- `GET /tasks` [S3] — across my projects, with `project_id, assigned_to_me, team_id, status, priority, overdue, search`.
+  In both lists, `team_id` matches at least one assignee in that team within the task's project. `overdue=1` keeps open tasks with `due_date` before today's UTC date. `overdue=0` leaves that filter off.
 - `GET /tasks/{task}` · `PUT /tasks/{task}` · `DELETE /tasks/{task}` [S3] — assignees via `assignee_ids[]`, reviewer via `reviewer_id`
 - `PATCH /tasks/{task}/status` [S3] — `status`, optional `progress` (R4)
 - `GET /tasks/{task}/comments` · `POST /tasks/{task}/comments` · `PUT /comments/{comment}` · `DELETE /comments/{comment}` [S3]
@@ -187,7 +189,7 @@ Stage tag in brackets = the stage that implements it.
 - `POST /meetings/{meeting}/summary/generate` [S5]
 - `GET /conversations` [S4] — inbox: project channels + team channels + direct chats, each with last message, ordered by last activity
 - `POST /conversations/direct` [S4] — `user_id`
-- `GET /conversations/{conversation}/messages` · `POST /conversations/{conversation}/messages` [S4]
+- `GET /conversations/{conversation}/messages?q=` · `POST /conversations/{conversation}/messages` [S4]
 - `GET /messages/{message}/attachment` [S4]
 - `GET /notifications` (with `unread_count`) · `POST /notifications/{id}/read` · `POST /notifications/read-all` [S4]
 
