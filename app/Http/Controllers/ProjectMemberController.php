@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Actions\AddProjectMember;
 use App\Actions\RemoveProjectMember;
 use App\Actions\UpdateProjectMember;
+use App\Http\Requests\PaginationRequest;
 use App\Http\Requests\StoreMemberRequest;
 use App\Http\Requests\UpdateMemberRequest;
 use App\Http\Resources\ProjectMemberResource;
@@ -16,7 +17,6 @@ use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ProjectMemberController extends Controller
@@ -26,19 +26,18 @@ class ProjectMemberController extends Controller
     /**
      * @throws AuthorizationException
      */
-    public function index(Request $request, Project $project): AnonymousResourceCollection
+    public function index(PaginationRequest $request, Project $project): AnonymousResourceCollection
     {
         $this->authorize('view', $project); // R2
 
-        $validated = $request->validate(['per_page' => ['nullable', 'integer', 'min:1', 'max:50']]);
-        $perPage = (int) ($validated['per_page'] ?? 15);
+        $perPage = (int) ($request->validated('per_page') ?? 15);
 
         $members = $project->members()
             ->with(['user', 'team'])
             ->orderBy('id')
             ->paginate($perPage);
 
-        return ProjectMemberResource::collection($members);
+        return ProjectMemberResource::collection($members)->withQuery($request->validated());
     }
 
     /**

@@ -9,6 +9,8 @@ erDiagram
     USERS ||--o{ PROJECT_MEMBERS : "belongs to"
     PROJECTS ||--o{ PROJECT_MEMBERS : "has"
     TEAMS |o--o{ PROJECT_MEMBERS : "groups"
+    PROJECTS ||--o{ DAILY_STATUSES : "receives"
+    USERS ||--o{ DAILY_STATUSES : "writes"
 
     PROJECTS ||--o{ TASKS : "contains"
     USERS ||--o{ TASKS : "creates"
@@ -70,6 +72,15 @@ erDiagram
         string role "leader or member"
         bigint team_id FK
         string job_title
+    }
+    DAILY_STATUSES {
+        bigint id PK
+        bigint project_id FK
+        bigint user_id FK
+        date status_date "UTC"
+        text progress
+        text next_steps
+        text blockers
     }
     TASKS {
         bigint id PK
@@ -170,10 +181,11 @@ erDiagram
 | Invariant | Where it is enforced |
 |---|---|
 | A user appears once per project | `unique(project_id, user_id)` on `project_members` |
+| A user can save one update per project and UTC day (R16) | atomic upsert with `unique(project_id, status_date, user_id)` on `daily_statuses` |
 | A project always has a leader (R1) | `AddProjectMember` / `UpdateProjectMember` / `RemoveProjectMember` guard |
 | Assignees and reviewers belong to the task's project (R3) | request validation + row locks in `LockTaskMembers` |
 | One project channel and one channel per team in a project (R8) | unique index on `(project_id, IFNULL(team_id, 0))`, channels ensured in `CreateProject` and the member actions |
 | One direct chat per pair of users (R8) | lower user id stored first + `unique(user_one_id, user_two_id)` |
 | A user is invited once to a meeting / assigned once to a task | `unique` pairs on the pivot tables |
 | Stored files are never reachable by path | private disk, random names, authorized download endpoints |
-| Deleting a project removes everything under it | foreign keys with `cascadeOnDelete` + storage cleanup in `DeleteProject` |
+| Deleting a project removes its operational records and stored files | foreign keys with `cascadeOnDelete` and storage cleanup in `DeleteProject`. Saved report snapshots stay with their authors and their `project_id` becomes `null`. |

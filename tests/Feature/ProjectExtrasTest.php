@@ -181,6 +181,34 @@ class ProjectExtrasTest extends TestCase
             ->assertJsonPath('data.status', 'done');
     }
 
+    public function test_done_projects_require_a_leader_to_reactivate_before_tasks_can_open(): void
+    {
+        $reviewer = $this->memberIn(null);
+        $task = Task::factory()->for($this->project)->completed()->create(['reviewer_id' => $reviewer->id]);
+        $projectUri = '/api/v1/projects/'.$this->project->id;
+        $statusUri = '/api/v1/tasks/'.$task->id.'/status';
+        $details = [
+            'name' => $this->project->name,
+            'priority' => $this->project->priority->value,
+            'start_date' => $this->project->start_date->toDateString(),
+            'end_date' => $this->project->end_date->toDateString(),
+        ];
+
+        $this->actingAs($this->leader, 'sanctum')->putJson($projectUri, $details + ['status' => 'done'])
+            ->assertOk()->assertJsonPath('data.progress_percent', 100);
+        $this->actingAs($reviewer, 'sanctum')->patchJson($statusUri, ['status' => 'in_progress'])
+            ->assertUnprocessable()->assertJsonValidationErrors('status');
+        $this->postJson($projectUri.'/tasks', ['title' => 'Follow-up'])
+            ->assertUnprocessable()->assertJsonValidationErrors('project');
+        $this->putJson($projectUri, $details + ['status' => 'active'])->assertForbidden();
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'status' => 'completed']);
+        $this->assertDatabaseCount('tasks', 1);
+
+        $this->actingAs($this->leader, 'sanctum')->putJson($projectUri, $details + ['status' => 'active'])->assertOk();
+        $this->actingAs($reviewer, 'sanctum')->patchJson($statusUri, ['status' => 'in_progress'])->assertOk();
+        $this->postJson($projectUri.'/tasks', ['title' => 'Follow-up'])->assertCreated();
+    }
+
     public function test_progress_percent_in_list_and_detail(): void
     {
         $me = $this->memberIn(null);

@@ -210,6 +210,24 @@ class ProjectFilesTest extends TestCase
         $this->getJson('/api/v1/files?uploaded_by_me=maybe')->assertUnprocessable()->assertJsonValidationErrors('uploaded_by_me');
     }
 
+    public function test_file_pagination_links_keep_the_uploader_and_search_filters(): void
+    {
+        $member = $this->member();
+        $older = ProjectFile::factory()->for($this->project)->for($member, 'uploader')->create(['original_name' => 'notes-one.txt']);
+        ProjectFile::factory()->for($this->project)->for($this->leader, 'uploader')->create(['original_name' => 'notes-shared.txt']);
+        ProjectFile::factory()->for($this->project)->for($member, 'uploader')->create(['original_name' => 'plan.txt']);
+        $newer = ProjectFile::factory()->for($this->project)->for($member, 'uploader')->create(['original_name' => 'notes-two.txt']);
+
+        $this->actingAs($member, 'sanctum');
+        foreach (['/api/v1/files', '/api/v1/projects/'.$this->project->id.'/files'] as $uri) {
+            $first = $this->getJson($uri.'?uploaded_by_me=1&search=notes&per_page=1')->assertOk()
+                ->assertJsonPath('data.0.id', $newer->id);
+            $this->getJson($first->json('links.next'))->assertOk()->assertJsonCount(1, 'data')
+                ->assertJsonPath('data.0.id', $older->id)->assertJsonPath('meta.total', 2)
+                ->assertJsonPath('meta.per_page', 1)->assertJsonPath('links.next', null);
+        }
+    }
+
     public function test_download_is_authorized_for_any_member(): void
     {
         Storage::fake('local');

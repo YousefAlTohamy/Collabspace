@@ -32,9 +32,10 @@ class TaskController extends Controller
         $tasks = $project->tasks()
             ->with(['reviewer', 'assignees'])
             ->withCount('comments')
-            ->orderByDesc('created_at');
+            ->orderByDesc('created_at')->orderByDesc('id');
 
-        return TaskResource::collection($this->filtered($tasks, $request)->paginate((int) ($request->validated('per_page') ?? 50)));
+        return TaskResource::collection($this->filtered($tasks, $request)->paginate((int) ($request->validated('per_page') ?? 50)))
+            ->withQuery($request->validated());
     }
 
     /**
@@ -48,14 +49,15 @@ class TaskController extends Controller
             ->whereHas('project', fn (Builder $project) => $project->visibleTo($user))
             ->with(['reviewer', 'assignees', 'project'])
             ->withCount('comments')
-            ->orderByDesc('created_at');
+            ->orderByDesc('created_at')->orderByDesc('id');
 
         if (($projectId = $request->validated('project_id')) !== null) {
             $project = Project::findVisibleOrFail($user, $projectId);
             $query->where('project_id', $project->id);
         }
 
-        return TaskResource::collection($this->filtered($query, $request)->paginate((int) ($request->validated('per_page') ?? 15)));
+        return TaskResource::collection($this->filtered($query, $request)->paginate((int) ($request->validated('per_page') ?? 15)))
+            ->withQuery($request->validated());
     }
 
     /**

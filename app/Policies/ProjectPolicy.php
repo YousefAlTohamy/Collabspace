@@ -27,6 +27,11 @@ class ProjectPolicy
         return $project->isLeader($user);
     }
 
+    public function viewAllDailyStatuses(User $user, Project $project): bool
+    {
+        return $project->isLeader($user);
+    }
+
     /**
      * SPEC §2: add/remove/change members is leader-only.
      */

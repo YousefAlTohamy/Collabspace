@@ -7,7 +7,7 @@ namespace App\Http\Controllers;
 use App\Actions\CreateProject;
 use App\Actions\DeleteProject;
 use App\Actions\ProjectTeamsOverview;
-use App\Enums\ProjectStatus;
+use App\Actions\UpdateProject;
 use App\Enums\TaskStatus;
 use App\Http\Requests\ListProjectsRequest;
 use App\Http\Requests\StoreProjectRequest;
@@ -23,7 +23,6 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\DB;
 
 class ProjectController extends Controller
 {
@@ -34,7 +33,11 @@ class ProjectController extends Controller
         $query = Project::query()
             // R2: lists never include projects the user is not a member of.
             ->visibleTo($request->user())
-            ->with(['members.user', 'members.team'])
+            ->with([
+                'members' => fn (Builder $members) => $members->orderBy('id')->limit(4),
+                'members.user',
+                'members.team',
+            ])
             ->withCount(['members', 'files', 'tasks', 'tasks as tasks_completed_count' => fn (Builder $tasks) => $tasks->where('status', TaskStatus::Completed->value)]);
 
         if ($search = $request->validated('search')) {
@@ -46,9 +49,11 @@ class ProjectController extends Controller
             $query->where('status', $status);
         }
 
-        $query->orderBy('created_at', $request->validated('sort') === 'oldest' ? 'asc' : 'desc');
+        $direction = $request->validated('sort') === 'oldest' ? 'asc' : 'desc';
+        $query->orderBy('created_at', $direction)->orderBy('id', $direction);
 
-        return ProjectResource::collection($query->paginate($request->validated('per_page', 15)));
+        return ProjectResource::collection($query->paginate($request->validated('per_page', 15)))
+            ->withQuery($request->validated());
     }
 
     /**
@@ -71,23 +76,9 @@ class ProjectController extends Controller
         return $this->detailResponse($project);
     }
 
-    public function update(UpdateProjectRequest $request, Project $project): ProjectDetailResource
+    public function update(UpdateProjectRequest $request, Project $project, UpdateProject $action): ProjectDetailResource
     {
-        $project = DB::transaction(function () use ($request, $project): Project {
-            $current = Project::query()->lockForUpdate()->findOrFail($project->id);
-            $current->fill($request->validated());
-
-            if ($current->isDirty('status')) {
-                $current->completed_at = $current->status === ProjectStatus::Done
-                    ? ($current->completed_at ?? now())
-                    : null;
-            }
-            $current->save();
-
-            return $current;
-        });
-
-        return $this->detailResponse($project);
+        return $this->detailResponse($action->execute($request->user(), $project, $request->validated()));
     }
 
     /**

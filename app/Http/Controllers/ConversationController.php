@@ -6,7 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\ListConversations;
 use App\Enums\ConversationType;
-use App\Http\Requests\PaginationRequest;
+use App\Http\Requests\ListConversationsRequest;
 use App\Http\Requests\StoreDirectConversationRequest;
 use App\Http\Resources\ConversationResource;
 use App\Models\Conversation;
@@ -17,9 +17,11 @@ use Illuminate\Support\Facades\Gate;
 
 class ConversationController extends Controller
 {
-    public function index(PaginationRequest $request, ListConversations $inbox): AnonymousResourceCollection
+    public function index(ListConversationsRequest $request, ListConversations $inbox): AnonymousResourceCollection
     {
-        return ConversationResource::collection($inbox->execute($request->user(), (int) ($request->validated('per_page') ?? 15)));
+        $conversations = $inbox->execute($request->user(), (int) ($request->validated('per_page') ?? 15), $request->validated('q'));
+
+        return ConversationResource::collection($conversations)->withQuery($request->validated());
     }
 
     public function storeDirect(StoreDirectConversationRequest $request): JsonResponse

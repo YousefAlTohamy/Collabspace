@@ -8,6 +8,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\Project;
 use App\Models\ProjectMember;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -154,6 +155,37 @@ class ChatTest extends TestCase
             ->assertJsonPath('data.1.project_id', $project->id)
             ->assertJsonPath('data.2.project_id', $empty->id)
             ->assertJsonPath('data.2.last_message', null);
+    }
+
+    public function test_inbox_search_filters_channels_and_other_participants_within_the_visible_inbox(): void
+    {
+        $firstParticipant = User::factory()->create(['name' => 'Design 100%_ready']);
+        $owner = User::factory()->create(['name' => 'Personal handle']);
+        $secondParticipant = User::factory()->create(['name' => 'Design 100%_ready team']);
+        $project = Project::factory()->for($owner, 'creator')->create(['name' => 'Design 100%_ready project']);
+        Project::factory()->for($owner, 'creator')->create(['name' => 'Design 100X_ready']);
+        Project::factory()->create(['name' => 'Foreign Design 100%_ready']);
+        $team = Team::query()->create(['name' => 'Review team']);
+        $project->members()->where('user_id', $owner->id)->update(['team_id' => $team->id]);
+        Conversation::ensureTeamChannel($project->id, $team->id);
+        $direct = Conversation::factory()->create(['user_one_id' => $firstParticipant->id, 'user_two_id' => $owner->id]);
+        $otherDirect = Conversation::factory()->create(['user_one_id' => $owner->id, 'user_two_id' => $secondParticipant->id]);
+        Conversation::factory()->create(['user_one_id' => $firstParticipant->id, 'user_two_id' => $secondParticipant->id]);
+
+        $this->actingAs($owner, 'sanctum');
+        $literal = '/api/v1/conversations?'.http_build_query(['q' => '100%_ready']);
+        $matches = $this->getJson($literal)->assertOk()->assertJsonPath('meta.total', 4);
+        $this->assertEqualsCanonicalizing([
+            $this->projectChannel($project)->id,
+            Conversation::query()->where('project_id', $project->id)->where('team_id', $team->id)->sole()->id,
+            $direct->id,
+            $otherDirect->id,
+        ], array_column($matches->json('data'), 'id'));
+        $page = $this->getJson($literal.'&per_page=1')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson($page->json('links.next'))->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('meta.total', 4);
+        $this->getJson('/api/v1/conversations?q=Review%20team')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.type', 'team');
+        $this->getJson('/api/v1/conversations?q=Personal%20handle')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/conversations?q=x')->assertUnprocessable()->assertJsonValidationErrors('q');
     }
 
     public function test_inbox_query_count_is_constant_from_one_to_ten(): void

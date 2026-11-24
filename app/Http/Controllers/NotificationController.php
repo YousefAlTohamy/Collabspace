@@ -23,6 +23,7 @@ class NotificationController extends Controller
             ->paginate($perPage);
 
         return NotificationResource::collection($notifications)
+            ->withQuery($request->validated())
             ->additional(['unread_count' => $user->notifications()->whereNull('read_at')->count()]);
     }
 

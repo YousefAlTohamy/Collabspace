@@ -9,9 +9,11 @@ use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\Mailer\Exception\TransportException;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -251,6 +253,17 @@ class AuthTest extends TestCase
 
         Notification::assertSentTo($user, ResetPassword::class);
         Notification::assertSentTimes(ResetPassword::class, 1);
+    }
+
+    public function test_forgot_password_keeps_the_generic_response_when_mail_delivery_fails(): void
+    {
+        $user = User::factory()->create();
+        Notification::shouldReceive('send')->once()->andThrow(new TransportException('Test mail failure'));
+        Log::shouldReceive('warning')->once()->with('Password reset email could not be delivered.');
+
+        $known = $this->postJson('/api/v1/auth/forgot-password', ['email' => $user->email])->assertOk();
+        $this->postJson('/api/v1/auth/forgot-password', ['email' => 'unregistered@collabspace.test'])
+            ->assertOk()->assertExactJson($known->json());
     }
 
     public function test_reset_password_succeeds_and_revokes_all_tokens(): void

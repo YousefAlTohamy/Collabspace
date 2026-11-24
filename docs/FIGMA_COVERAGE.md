@@ -3,7 +3,7 @@
 How each screen of the Collabspace design (Team C) is served by this API, and what was left out on purpose.
 Legend: ✅ covered · ⚠️ covered with a note · ❌ not in v1 (reason given).
 
-All paths are under `/api/v1`. Business rules (R1–R14) are in [`SPEC.md`](SPEC.md).
+All paths are under `/api/v1`. Business rules (R1–R16) are in [`SPEC.md`](SPEC.md).
 
 ## What the design asks for
 
@@ -58,23 +58,26 @@ Members see and change what belongs to their projects; leaders manage the projec
 | Screen / element | API | Status |
 |---|---|---|
 | Kanban columns To-do / In progress / In review / Completed | `status` field, `PATCH /tasks/{task}/status` | ✅ the review step is enforced (R4) |
-| Add task inside a column | `POST /projects/{project}/tasks` with `status` | ✅ |
+| Add task inside a column | `POST /projects/{project}/tasks` with an open `status` | ⚠️ the mockup shows this control in Completed too. A new task reaches Completed through the review rule. |
 | Create task overlay (name, dates, guests, files) | same endpoint with `assignee_ids[]`; files via `POST /projects/{project}/files` with `task_id` | ✅ |
 | Reviewer, priority, progress bar, comments counter, due date | `reviewer_id`, `priority`, `progress`, `comments_count`, `due_date` (+ `is_overdue`) | ✅ |
 | Tasks page: project filter, "My tasks" | `GET /tasks?project_id=&assigned_to_me=&status=&priority=&overdue=&search=` | ✅ |
 | "UI/UX tasks", "Frontend tasks" … filters | `GET /tasks?team_id=` or `GET /projects/{project}/tasks?team_id=` | ✅ matches an assignee's team in the task's own project |
 | Task comments | `GET/POST /tasks/{task}/comments`, `PUT/DELETE /comments/{comment}` | ✅ |
+| Daily Status Update from the case study | `PUT /projects/{project}/daily-statuses/today`, `GET /projects/{project}/daily-statuses?date=` | ✅ API supports progress, next steps, and blockers. Members see their own updates and leaders see the project's updates. |
 
 ## Chats
 
 | Screen / element | API | Status |
 |---|---|---|
 | Inbox (direct messages) | `GET /conversations`, `POST /conversations/direct` | ✅ only between users who share a project |
+| Search in the inbox sidebar | `GET /conversations?q=` | ✅ searches the visible inbox by project, team, or other participant name |
 | Project chats (public channel) | one channel per project in `GET /conversations` | ✅ members only |
 | Team channels (Frontend, Backend…) | `type: team` entries in `GET /conversations` | ✅ one channel per team in each project, open to the members of that team |
 | Messages, attachments | `GET/POST /conversations/{conversation}/messages`, `GET /messages/{message}/attachment` | ✅ same upload rules as project files |
 | Search in chat | `GET /conversations/{conversation}/messages?q=` | ✅ searches text within the selected conversation |
 | Threads (#Screen edit), voice/video call icons | — | ❌ out of scope in v1 (clients poll with cursor pagination) |
+| Chat menu overlays | — | ❌ Pin, clear, archive, media gallery, audio, and polls are outside the backend's current chat workflow. Photo and document uploads use the attachment API. |
 
 ## Meetings
 
@@ -94,10 +97,17 @@ Members see and change what belongs to their projects; leaders manage the projec
 | Element | API | Status |
 |---|---|---|
 | Task completion / projects completion / teams activity rates (+ change vs last month) | `GET /reports/overview` | ✅ computed from task timestamps for explicit windows |
-| Task completion time vs deadline, projects progress, worker activity charts | same response (monthly series) | ✅ |
-| Duration filter (today / week / month / 3 months / year) | `period=today\|week\|month\|three_months\|year` | ✅ Today uses midnight UTC through now |
-| Submit a detailed report | `POST /reports`, `GET /reports`, `GET /reports/{report}` | ✅ stores the computed numbers as a snapshot |
+| Task completion time vs deadline, projects progress, worker activity charts | same response (monthly series) | ⚠️ The worker activity chart is a count of completed tasks. Series are grouped by month. |
+| Duration filter (today / week / month / 3 months / year) | `period=today\|week\|month\|three_months\|year` | ⚠️ Today uses midnight UTC through now. The remaining periods are rolling 7, 30, 90 and 365 days. |
+| Submit a detailed report | `POST /reports`, `GET /reports`, `GET /reports/{report}` | ⚠️ Saved numeric snapshots support Project Progress, Task Performance and Team Activity. The overlay also shows Meetings Summary and KPIs as separate report types. |
 | AI button on the report form | — | ❌ reports are numeric snapshots in v1 |
+
+## AI assistant
+
+| Element | API | Status |
+|---|---|---|
+| Text chat | `GET/POST/DELETE /ai/messages` | ✅ private assistant history for the current user |
+| Voice controls and link previews | — | ❌ the AI endpoint accepts text. Speech and rich preview controls in the mockup have no backend API in v1. |
 
 ## Profile and settings
 
@@ -131,8 +141,8 @@ Members see and change what belongs to their projects; leaders manage the projec
 
 ## Case-study ideas left for later
 
-Daily status updates, table/timeline task views, workflows, invitations by email, file versioning, AI root-cause analysis.
-They have no screen in the design, and the scope was kept to what a team can use on day one.
+Table/timeline task views, workflows, invitations by email, file versioning, and AI root-cause analysis are outside v1.
+The case study explicitly describes version history and advanced workflows. Daily Status is now supported by the API, and the export describes it in the case study rather than showing a dedicated form.
 
 ## Notes on the design itself
 

@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Enums\ProjectStatus;
 use App\Enums\TaskStatus;
+use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 
 /**
  * R4 side effects of a task status transition, in one transaction:
@@ -20,8 +23,14 @@ class ChangeTaskStatus
     public function execute(User $actor, Task $task, TaskStatus $to, ?int $progress = null): Task
     {
         return DB::transaction(function () use ($actor, $task, $to, $progress): Task {
+            $project = Project::query()->lockForUpdate()->findOrFail($task->project_id);
             $task = Task::query()->lockForUpdate()->findOrFail($task->id);
+            $task->setRelation('project', $project);
             Gate::forUser($actor)->authorize('changeStatus', [$task, $to]);
+
+            if ($to !== TaskStatus::Completed && $project->status === ProjectStatus::Done) {
+                throw ValidationException::withMessages(['status' => __('A leader must reactivate the project before reopening tasks.')]);
+            }
 
             if ($to === TaskStatus::Completed) {
                 $task->forceFill([
