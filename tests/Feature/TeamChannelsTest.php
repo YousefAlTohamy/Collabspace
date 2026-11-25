@@ -103,9 +103,11 @@ class TeamChannelsTest extends TestCase
             'body' => 'Backend notes',
             'attachment' => UploadedFile::fake()->image('notes.png', 1, 1),
         ])->assertCreated()->json('data.id');
+        $message = "/api/v1/messages/{$id}";
         $attachment = "/api/v1/messages/{$id}/attachment";
         $this->getJson($messages)->assertOk()->assertJsonPath('data.0.id', $id);
         $this->get($attachment)->assertDownload('notes.png')->assertHeader('X-Content-Type-Options', 'nosniff');
+        $this->patchJson($message, ['body' => 'Updated backend notes'])->assertOk();
 
         $this->getJson('/api/v1/conversations')->assertOk()->assertJsonCount(2, 'data');
         foreach ([$frontendMember, $owner, $outsider] as $denied) {
@@ -115,12 +117,14 @@ class TeamChannelsTest extends TestCase
         $membership = "/api/v1/projects/{$project->id}/members/{$member->id}";
         $this->actingAs($owner, 'sanctum')->putJson($membership, ['team_id' => $frontend->id])->assertOk();
         $this->assertChannelForbidden($member, $messages, $attachment);
+        $this->patchJson($message, ['body' => 'Update after moving team'])->assertForbidden();
         $this->actingAs($owner, 'sanctum')->putJson($membership, ['team_id' => $backend->id])->assertOk();
         $this->actingAs($member, 'sanctum')->getJson($messages)->assertOk();
 
         $this->actingAs($owner, 'sanctum')->deleteJson($membership)->assertOk();
         $this->assertChannelForbidden($member, $messages, $attachment);
         $this->assertDatabaseHas('conversations', ['id' => $channel->id]);
+        $this->assertDatabaseHas('messages', ['id' => $id, 'body' => 'Updated backend notes']);
         $this->assertDatabaseCount('messages', 1);
     }
 

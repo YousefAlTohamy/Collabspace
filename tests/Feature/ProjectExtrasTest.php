@@ -125,6 +125,26 @@ class ProjectExtrasTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_current_project_members_can_see_a_teammates_profile_availability(): void
+    {
+        $team = Team::create(['name' => 'Backend']);
+        $member = $this->memberIn($team);
+        $this->actingAs($member, 'sanctum')->putJson('/api/v1/me', [
+            'name' => $member->name,
+            'availability_status' => 'busy',
+        ])->assertOk();
+
+        $uri = '/api/v1/projects/'.$this->project->id;
+        $this->actingAs($this->leader, 'sanctum');
+        $this->getJson($uri.'/teams')->assertOk()
+            ->assertJsonPath('data.0.members.0.user.id', $member->id)
+            ->assertJsonPath('data.0.members.0.availability_status', 'busy')
+            ->assertJsonMissingPath('data.0.members.0.user.email')
+            ->assertJsonMissingPath('data.0.members.0.user.phone');
+
+        $this->actingAs(User::factory()->create(), 'sanctum')->getJson($uri.'/teams')->assertForbidden();
+    }
+
     public function test_me_stats_counts_completed_assigned_tasks(): void
     {
         $me = $this->memberIn(null);

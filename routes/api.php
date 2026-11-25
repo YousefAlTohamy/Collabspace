@@ -93,6 +93,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/conversations/{conversation}/messages', [MessageController::class, 'index'])->whereNumber('conversation');
         Route::post('/conversations/{conversation}/messages', [MessageController::class, 'store'])
             ->middleware(ThrottleChatAttachments::class)->whereNumber('conversation');
+        Route::patch('/messages/{message}', [MessageController::class, 'update'])->whereNumber('message');
         Route::get('/messages/{message}/attachment', [MessageController::class, 'attachment'])
             ->name('messages.attachment')->whereNumber('message');
 

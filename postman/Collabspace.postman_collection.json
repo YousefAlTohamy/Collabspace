@@ -2,7 +2,7 @@
   "info": {
     "name": "Collabspace API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Set baseUrl if your port differs. Pick a file in the upload requests before running them. Folders run top to bottom; destructive requests are in the last folder. Run order: 1) Register  2) Register helper: second user  3) List teams  4) Create project  5) Add member  6) Create task, then the rest (comments, files, chat, meetings)."
+    "description": "Run the collection in order against a local demo database. Demo upload files are in postman/fixtures. No Google or AI keys are needed by default. Set aiMode to configured to require successful AI replies and summaries. Run Cleanup only for records created by this workflow."
   },
   "auth": {
     "type": "bearer",
@@ -18,6 +18,14 @@
     {
       "key": "baseUrl",
       "value": "http://localhost:8000/api/v1"
+    },
+    {
+      "key": "aiMode",
+      "value": "unconfigured"
+    },
+    {
+      "key": "googleIdToken",
+      "value": "not-a-google-id-token"
     },
     {
       "key": "token",
@@ -323,7 +331,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "The frontend obtains the ID token from Google Sign-In and sends it here. The server verifies it (signature, issuer, audience, expiry, verified email).",
+            "description": "The placeholder exercises the default error path. Set googleIdToken to a fresh Google ID token to require a successful sign-in. The Google response includes its own Collabspace token.",
             "url": {
               "raw": "{{baseUrl}}/auth/google",
               "host": [
@@ -336,7 +344,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id_token\": \"<Google ID token from the frontend sign-in>\",\n  \"remember\": false\n}",
+              "raw": "{\n  \"id_token\": \"{{googleIdToken}}\",\n  \"remember\": false\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -353,8 +361,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"200 with a real Google ID token, 401 with the placeholder, 503 if Google sign-in is not configured\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 401, 503]); });",
-                  "if (pm.response.code === 200) { pm.collectionVariables.set(\"token\", pm.response.json().token); }"
+                  "pm.test(\"Google sign-in matches the selected demo case\", function () {",
+                  "  if (pm.variables.get(\"googleIdToken\") === \"not-a-google-id-token\") {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([401, 503]);",
+                  "  } else {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().token).to.be.a(\"string\").and.not.empty;",
+                  "  }",
+                  "});"
                 ]
               }
             }
@@ -471,7 +485,7 @@
                 {
                   "key": "avatar",
                   "type": "file",
-                  "src": []
+                  "src": "postman/fixtures/demo-avatar.png"
                 }
               ]
             }
@@ -962,7 +976,12 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });"
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Project members include their profile availability\", function () {",
+                  "  const members = pm.response.json().data.flatMap(team => team.members);",
+                  "  pm.expect(members).to.not.be.empty;",
+                  "  members.forEach(member => pm.expect(member).to.have.property(\"availability_status\"));",
+                  "});"
                 ]
               }
             }
@@ -1750,7 +1769,7 @@
                 {
                   "key": "file",
                   "type": "file",
-                  "src": []
+                  "src": "postman/fixtures/demo-upload.txt"
                 },
                 {
                   "key": "task_id",
@@ -2107,6 +2126,116 @@
           ]
         },
         {
+          "name": "Edit message (author)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Only the author with current access to the conversation can change the message text.",
+            "url": {
+              "raw": "{{baseUrl}}/messages/{{messageId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "messages",
+                "{{messageId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Hello team, the latest notes are ready.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Author can edit their message\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const message = pm.response.json().data;",
+                  "  pm.expect(String(message.id)).to.eql(String(pm.collectionVariables.get(\"messageId\")));",
+                  "  pm.expect(message.body).to.eql(JSON.parse(pm.request.body.raw).body);",
+                  "  pm.expect(message.edited_at).to.be.a(\"string\").and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Edit message (other participant is forbidden)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "The helper account can join the conversation but cannot edit a message written by another participant.",
+            "url": {
+              "raw": "{{baseUrl}}/messages/{{messageId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "messages",
+                "{{messageId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Hello team, the latest notes are ready.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Another participant cannot edit the message\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Send message with attachment",
           "request": {
             "method": "POST",
@@ -2139,7 +2268,7 @@
                 {
                   "key": "attachment",
                   "type": "file",
-                  "src": []
+                  "src": "postman/fixtures/demo-upload.txt"
                 }
               ]
             }
@@ -2515,7 +2644,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Needs at least one transcript entry (422 otherwise) and a configured AI provider (503 otherwise). Rate limit: 20/min.",
+            "description": "Needs at least one transcript entry (422 otherwise) and a configured AI provider (503 otherwise). Rate limit: 20/min. The default aiMode checks the 503 response without a provider. Set aiMode to configured to require success with a provider.",
             "url": {
               "raw": "{{baseUrl}}/meetings/{{meetingId}}/summary/generate",
               "host": [
@@ -2535,7 +2664,17 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });"
+                  "pm.test(\"AI response matches aiMode\", function () {",
+                  "  const mode = pm.variables.get(\"aiMode\");",
+                  "  pm.expect(mode).to.be.oneOf([\"unconfigured\", \"configured\"]);",
+                  "  if (mode === \"configured\") {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.summary).to.be.a(\"string\").and.not.empty;",
+                  "  } else {",
+                  "    pm.response.to.have.status(503);",
+                  "    pm.expect(pm.response.json()).to.eql({ message: \"AI assistant is unavailable.\" });",
+                  "  }",
+                  "});"
                 ]
               }
             }
@@ -2955,7 +3094,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Needs AI_BASE_URL, AI_API_KEY and AI_MODEL in .env (OpenAI-compatible). Returns 503 when the AI is not configured. Max 4000 characters, 20 requests/min.",
+            "description": "Needs AI_BASE_URL, AI_API_KEY and AI_MODEL in .env (OpenAI-compatible). Returns 503 when the AI is not configured. Max 4000 characters, 20 requests/min. The default aiMode checks the 503 response without a provider. Set aiMode to configured to require success with a provider.",
             "url": {
               "raw": "{{baseUrl}}/ai/messages",
               "host": [
@@ -2982,7 +3121,17 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });"
+                  "pm.test(\"AI response matches aiMode\", function () {",
+                  "  const mode = pm.variables.get(\"aiMode\");",
+                  "  pm.expect(mode).to.be.oneOf([\"unconfigured\", \"configured\"]);",
+                  "  if (mode === \"configured\") {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().data.assistant_message.content).to.be.a(\"string\").and.not.empty;",
+                  "  } else {",
+                  "    pm.response.to.have.status(503);",
+                  "    pm.expect(pm.response.json()).to.eql({ message: \"AI assistant is unavailable.\" });",
+                  "  }",
+                  "});"
                 ]
               }
             }

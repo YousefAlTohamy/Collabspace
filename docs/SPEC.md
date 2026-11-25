@@ -80,6 +80,7 @@ Download only via authorized endpoint (R2). Deleting a project removes its store
 - **Direct** conversations are between exactly two users, unique per pair, get-or-create. Allowed only if the two users
   share at least one project (else 403).
 - A message needs a `body` (max 5000) or an attachment (same whitelist/limit as R7, stored privately). Only participants can read or post.
+- Only the author can edit a message, and they must still have access to its conversation. An edit requires nonempty `body` text (max 5000). Changed text sets `edited_at` to the current UTC time. Sending the same text again preserves `edited_at`. Attachments, creation time and message order stay the same.
 - Messages are returned newest-first with cursor pagination. Optional `q` (2–200 characters) searches message bodies within the authorized conversation and treats LIKE wildcards literally. No realtime in v1 (clients poll).
 - Inbox `q` (2–200 characters) matches a project name, a team name, or the other participant's name in a visible conversation. It also treats LIKE wildcards literally.
 
@@ -91,7 +92,9 @@ Download only via authorized endpoint (R2). Deleting a project removes its store
 - **Summary**: text field on the meeting. The organizer can generate it from the transcript via the AI service (needs at least one transcript entry, else 422).
 
 **R10 Notifications** (Laravel database notifications): created when a user is (a) added to a project, (b) assigned to a task,
-(c) invited to a meeting, and by a scheduled command when (d) a meeting starts within 30 minutes (once per meeting, to its participants who still have access to the project) or (e) a task is overdue (once per overdue episode, to its assignees; the flag is cleared when the due date moves to the future or the task is completed). Never notify the actor about their own action. A user only reads/marks their own.
+(c) invited to a meeting, and by a scheduled command when (d) a meeting starts within 30 minutes or (e) a task is overdue.
+A meeting reminder is sent once for the current schedule to participants who still have access to the project. Changing `starts_at` clears the reminder flag and allows a reminder for the new time. Editing other fields keeps the flag.
+An overdue task notification is sent once per overdue episode to its assignees. The flag is cleared when the due date moves to the future or the task is completed. Never notify the actor about their own action. A user only reads/marks their own.
 
 **R11 Reports** (scope = projects the user is a member of, optional `project_id` must be one of them, `period` = `today|week|month|three_months|year`, default `year`):
 - `task_completion_rate` = completed tasks / all tasks in scope, in %.
@@ -144,7 +147,7 @@ Enums are lowercase snake strings.
 - **task_comments**: task_id, user_id, body (max 2000).
 - **files**: project_id, task_id?, uploaded_by, original_name, path, mime_type, size.
 - **conversations**: type (`project|team|direct`), project_id? (project and team channels), team_id? (team channels only; unique per project and team, and one project channel per project), user_one_id?/user_two_id? (direct, stored as lower id first, unique pair).
-- **messages**: conversation_id, user_id, body?, attachment_path?, attachment_name?, attachment_mime?, attachment_size?
+- **messages**: conversation_id, user_id, body?, attachment_path?, attachment_name?, attachment_mime?, attachment_size?, edited_at? (UTC)
 - **meetings**: project_id?, created_by, title, starts_at, duration_minutes, meeting_url?, note?, summary?, reminder_sent_at?
 - **meeting_participants**: meeting_id, user_id — unique pair.
 - **meeting_transcripts**: meeting_id, speaker_id?, offset_seconds, text.
@@ -175,7 +178,7 @@ Stage tag in brackets = the stage that implements it.
 - `GET /projects/{project}` [S2] — overview: dates, priority, status, type, members; `progress_percent` and tasks counts by status are added in S3.
 - `PUT /projects/{project}` · `DELETE /projects/{project}` [S2]
 - `GET /projects/{project}/members` · `POST` · `PUT /projects/{project}/members/{user}` · `DELETE ...` [S2]
-- `GET /projects/{project}/teams` [S3] — teams with members and each member's tasks done/total (Teams tab and dashboard widget).
+- `GET /projects/{project}/teams` [S3] — teams with members, each member's tasks done/total, and their read-only profile `availability_status` (Teams tab and dashboard widget). Only current project members can see these results.
 - `GET /projects/{project}/daily-statuses?date=&per_page=` — updates for the selected `YYYY-MM-DD` date, default today UTC. Leaders see all and members see their own.
 - `PUT /projects/{project}/daily-statuses/today` — `progress`, `next_steps`, `blockers?`. Saves the caller's update for today (200).
 
@@ -196,6 +199,7 @@ Stage tag in brackets = the stage that implements it.
 - `GET /conversations?q=` [S4] — inbox: project channels + team channels + direct chats, each with last message, ordered by last activity. The optional search matches conversation names (R8).
 - `POST /conversations/direct` [S4] — `user_id`
 - `GET /conversations/{conversation}/messages?q=` · `POST /conversations/{conversation}/messages` [S4]
+- `PATCH /messages/{message}` — update the author's message text (`body`). Returns the message with nullable `edited_at` (R8).
 - `GET /messages/{message}/attachment` [S4]
 - `GET /notifications` (with `unread_count`) · `POST /notifications/{id}/read` · `POST /notifications/read-all` [S4]
 
@@ -217,6 +221,6 @@ Stage tag in brackets = the stage that implements it.
 
 ## 7. Out of scope for v1 (do not build)
 
-Table/timeline task views, chat threads/calls/realtime, file versioning, workflows,
+Table/timeline task views, chat threads/calls/realtime, message read receipts, meeting attachments, file versioning, workflows,
 invites by email, email change, recent searches (client side), "hours worked", language switching (client side),
 soft deletes, multi-tenant workspaces.

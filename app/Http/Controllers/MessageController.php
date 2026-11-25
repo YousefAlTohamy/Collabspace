@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Actions\SendChatMessage;
 use App\Http\Requests\ListMessagesRequest;
 use App\Http\Requests\StoreMessageRequest;
+use App\Http\Requests\UpdateMessageRequest;
 use App\Http\Resources\MessageResource;
 use App\Models\Conversation;
 use App\Models\Message;
@@ -37,6 +38,17 @@ class MessageController extends Controller
         $message = $action->execute($request->user(), $conversation, $request->validated('body'), $request->validated('attachment'));
 
         return (new MessageResource($message->load('user')))->response()->setStatusCode(201);
+    }
+
+    public function update(UpdateMessageRequest $request, Message $message): MessageResource
+    {
+        $message->fill($request->validated());
+        if ($message->isDirty('body')) {
+            $message->edited_at = now();
+            $message->save();
+        }
+
+        return new MessageResource($message->load('user'));
     }
 
     public function attachment(Message $message): StreamedResponse

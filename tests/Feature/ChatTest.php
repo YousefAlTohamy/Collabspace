@@ -91,6 +91,92 @@ class ChatTest extends TestCase
         $this->getJson("/api/v1/messages/{$message->id}/attachment")->assertForbidden();
     }
 
+    public function test_author_can_edit_text_without_changing_the_attachment_or_message_order(): void
+    {
+        Storage::fake('local');
+        $this->freezeSecond();
+        $project = Project::factory()->create();
+        $channel = $this->projectChannel($project);
+        $message = Message::factory()->for($channel)->for($project->creator, 'user')->create([
+            'body' => 'Original text',
+            'attachment_path' => "chat/{$channel->id}/notes.txt",
+            'attachment_name' => 'notes.txt',
+            'attachment_mime' => 'text/plain',
+            'attachment_size' => 5,
+        ]);
+        Storage::disk('local')->put($message->attachment_path, 'notes');
+        $newest = Message::factory()->for($channel)->create();
+        $uri = "/api/v1/messages/{$message->id}";
+
+        $this->travel(1)->minute();
+        $editedAt = now()->toISOString();
+        $this->actingAs($project->creator, 'sanctum')->patchJson($uri, [
+            'body' => 'Corrected text',
+            'user_id' => $newest->user_id,
+            'conversation_id' => $channel->id + 1,
+            'attachment_name' => 'replacement.txt',
+            'edited_at' => null,
+        ])->assertOk()
+            ->assertJsonPath('data.id', $message->id)
+            ->assertJsonPath('data.conversation_id', $channel->id)
+            ->assertJsonPath('data.user.id', $project->creator->id)
+            ->assertJsonPath('data.body', 'Corrected text')
+            ->assertJsonPath('data.attachment.name', 'notes.txt')
+            ->assertJsonPath('data.created_at', $message->created_at->toISOString())
+            ->assertJsonPath('data.edited_at', $editedAt)
+            ->assertJsonMissingPath('data.attachment_path');
+
+        $this->travel(1)->minute();
+        $this->patchJson($uri, ['body' => 'Corrected text'])->assertOk()->assertJsonPath('data.edited_at', $editedAt);
+        $this->getJson("/api/v1/conversations/{$channel->id}/messages")->assertOk()
+            ->assertJsonPath('data.0.id', $newest->id)
+            ->assertJsonPath('data.0.edited_at', null)
+            ->assertJsonPath('data.1.body', 'Corrected text')
+            ->assertJsonPath('data.1.edited_at', $editedAt);
+        $this->get($uri.'/attachment')->assertDownload('notes.txt');
+        Storage::disk('local')->assertExists($message->attachment_path);
+    }
+
+    public function test_project_message_edit_requires_authorship_and_current_membership(): void
+    {
+        $project = Project::factory()->create();
+        $member = User::factory()->create();
+        ProjectMember::factory()->for($project)->for($member)->create();
+        $message = Message::factory()->for($this->projectChannel($project))->for($member, 'user')->create();
+        $uri = "/api/v1/messages/{$message->id}";
+        $payload = ['body' => 'Updated'];
+
+        $this->patchJson($uri, $payload)->assertUnauthorized();
+        $this->actingAs(User::factory()->create(), 'sanctum')->patchJson($uri, $payload)->assertForbidden();
+        $this->actingAs($project->creator, 'sanctum')->patchJson($uri, $payload)->assertForbidden();
+        $this->actingAs($member, 'sanctum');
+        foreach ([[], ['body' => '   '], ['body' => ['text']], ['body' => str_repeat('x', 5001)]] as $invalid) {
+            $this->patchJson($uri, $invalid)->assertUnprocessable()->assertJsonValidationErrors('body');
+        }
+
+        $this->actingAs($project->creator, 'sanctum')
+            ->deleteJson("/api/v1/projects/{$project->id}/members/{$member->id}")->assertOk();
+        $this->actingAs($member, 'sanctum')->patchJson($uri, $payload)->assertForbidden();
+        $this->assertDatabaseHas('messages', ['id' => $message->id, 'body' => $message->body, 'edited_at' => null]);
+    }
+
+    public function test_direct_message_can_be_edited_by_its_author_only(): void
+    {
+        $project = Project::factory()->create();
+        $other = User::factory()->create();
+        ProjectMember::factory()->for($project)->for($other)->create();
+        $this->actingAs($project->creator, 'sanctum');
+        $conversationId = $this->postJson('/api/v1/conversations/direct', ['user_id' => $other->id])
+            ->assertCreated()->json('data.id');
+        $id = $this->postJson("/api/v1/conversations/{$conversationId}/messages", ['body' => 'Direct message'])
+            ->assertCreated()->json('data.id');
+        $uri = "/api/v1/messages/{$id}";
+
+        $this->actingAs($other, 'sanctum')->patchJson($uri, ['body' => 'Someone else’s text'])->assertForbidden();
+        $this->actingAs($project->creator, 'sanctum')->patchJson($uri, ['body' => 'Edited direct message'])
+            ->assertOk()->assertJsonPath('data.body', 'Edited direct message');
+    }
+
     public function test_cursor_paginates_messages_newest_first(): void
     {
         $project = Project::factory()->create();
