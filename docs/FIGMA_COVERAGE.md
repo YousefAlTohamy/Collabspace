@@ -32,7 +32,7 @@ Members see and change what belongs to their projects; leaders manage the projec
 | Active projects with progress | `GET /dashboard` → `active_projects` | ✅ |
 | Recent files + download | `GET /dashboard` → `recent_files`, `GET /files/{file}/download` | ✅ |
 | My tasks (due, priority, progress) | `GET /dashboard` → `my_tasks` | ✅ |
-| Teams widget (member tasks 12/14) | `GET /projects/{project}/teams` | ✅ |
+| Teams widget (member tasks 12/14 and availability) | `GET /projects/{project}/teams` | ✅ current project members see each member's profile availability |
 | Upcoming meetings | `GET /dashboard` → `upcoming_meetings` | ✅ |
 | Ask AI | `POST /ai/messages` | ✅ |
 | Notifications bell | `GET /notifications`, `POST /notifications/{id}/read`, `POST /notifications/read-all` | ✅ |
@@ -75,6 +75,8 @@ Members see and change what belongs to their projects; leaders manage the projec
 | Project chats (public channel) | one channel per project in `GET /conversations` | ✅ members only |
 | Team channels (Frontend, Backend…) | `type: team` entries in `GET /conversations` | ✅ one channel per team in each project, open to the members of that team |
 | Messages, attachments | `GET/POST /conversations/{conversation}/messages`, `GET /messages/{message}/attachment` | ✅ same upload rules as project files |
+| Edit a sent message (design review comment) | `PATCH /messages/{message}` | ✅ the author must still have access to the conversation. The response includes `edited_at`. |
+| Message read receipts (design review comment) | — | ❌ out of scope in v1 |
 | Search in chat | `GET /conversations/{conversation}/messages?q=` | ✅ searches text within the selected conversation |
 | Threads (#Screen edit), voice/video call icons | — | ❌ out of scope in v1 (clients poll with cursor pagination) |
 | Chat menu overlays | — | ❌ Pin, clear, archive, media gallery, audio, and polls are outside the backend's current chat workflow. Photo and document uploads use the attachment API. |
@@ -89,8 +91,9 @@ Members see and change what belongs to their projects; leaders manage the projec
 | Transcript + search | `GET/POST /meetings/{meeting}/transcript?q=` | ✅ |
 | AI summary | `POST /meetings/{meeting}/summary/generate` | ✅ needs the AI provider variables |
 | Note tab | `note` field | ✅ |
+| Meeting attachments (design review comment) | — | ❌ out of scope in v1 |
 | Comments tab, transcript language selector | — | ❌ not in v1 |
-| Meeting reminder notification | scheduled command `notifications:send-reminders` | ✅ 30 minutes before, once per meeting |
+| Meeting reminder notification | scheduled command `notifications:send-reminders` | ✅ within 30 minutes of the current start time. Rescheduling makes the meeting eligible again. |
 
 ## Reports
 

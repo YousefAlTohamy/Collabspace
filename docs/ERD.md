@@ -129,6 +129,7 @@ erDiagram
         bigint user_id FK
         text body
         string attachment_path "private disk, never exposed"
+        timestamp edited_at "null until the author changes the text"
     }
     MEETINGS {
         bigint id PK

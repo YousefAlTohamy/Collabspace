@@ -25,6 +25,7 @@ class MessageResource extends JsonResource
                 'download_url' => route('messages.attachment', ['message' => $this->id]),
             ],
             'created_at' => $this->created_at->toISOString(),
+            'edited_at' => $this->edited_at?->toISOString(),
         ];
     }
 }

@@ -18,6 +18,11 @@ class Message extends Model
     /** @use HasFactory<MessageFactory> */
     use HasFactory;
 
+    protected function casts(): array
+    {
+        return ['edited_at' => 'immutable_datetime'];
+    }
+
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(Conversation::class);

@@ -16,11 +16,11 @@ For a short review, start with the [seeded Quick demo](#quick-demo-from-the-seed
 | Module | What it covers |
 |---|---|
 | **Auth & profile** | Register, password and Google sign-in, logout, password reset, profile, avatar, password change, workspace user search |
-| **Projects & teams** | Projects with members, roles (`leader` / `member`) and teams (UI/UX, Frontend, Backend, Marketing) |
+| **Projects & teams** | Projects with members, roles (`leader` / `member`), teams (UI/UX, Frontend, Backend, Marketing) and member availability |
 | **Daily Status** | One update per member per UTC day with progress, next steps, and blockers |
 | **Tasks** | Kanban statuses, priorities, assignees, reviewer, progress, comments, overdue flag |
 | **Files** | Project files with strict type/size checks, private storage and authorized downloads |
-| **Chat** | Project and team channels, direct messages, attachments, inbox and message search, cursor pagination |
+| **Chat** | Project and team channels, direct messages, attachments, author-only message editing, inbox and message search, cursor pagination |
 | **Meetings** | Calendar, participants, transcript with search, AI-generated summary |
 | **Notifications** | Project membership, task assignments, meeting invitations, overdue tasks and upcoming meeting reminders |
 | **Dashboard & reports** | Personal dashboard, report statistics with period comparison, saved report snapshots |
@@ -40,6 +40,7 @@ Everything is organized around the **project**: being a member of a project is t
 - Assignees and reviewers must be members of the task's project. Removing a member also removes them from the project's assignments.
 - Starting a direct chat requires a shared project. Losing membership removes access to that project's channel immediately.
 - Team channels are open to members of that team in the project. Every project has one project channel open to all its members.
+- Only the author can edit a message, while they still have access to the conversation. The message keeps its attachment and position in the chat.
 - Meetings are visible only to the organizer and participants. Project-linked meetings also require current membership. For a meeting without a project, invitees must share a project with the organizer.
 - Reports are computed from real task data (`created_at`, `completed_at`, `due_date`) for explicit time windows and compare each period with the previous one.
 
@@ -137,6 +138,8 @@ In the `local` environment, `--seed` also loads **demo data** (see below). In an
 
 Run the scheduler worker with `docker compose exec -u sail laravel.test php artisan schedule:work` to send meeting reminders and overdue task notifications every five minutes. To check for due notifications immediately, run `docker compose exec -u sail laravel.test php artisan notifications:send-reminders`.
 
+The reminder is sent once for the meeting's current start time. Changing the start time makes the meeting eligible for a new reminder.
+
 In a fresh local demo database, run the command twice as soon as seeding finishes, before starting the worker. The first run sends notifications for overdue tasks and a meeting starting in 20 minutes. The second run should show zero for both counts. Sign in as Mohamed and set **List notifications (saves notificationId)** to **Inherit auth from parent** to see both types of notifications. The collection's full workflow uses the helper account's token for that request.
 
 ### Environment variables
@@ -179,24 +182,32 @@ chat messages, upcoming meetings, a meeting with transcript and summary, notific
 
 ## API documentation (Postman)
 
-Import [`postman/Collabspace.postman_collection.json`](postman/Collabspace.postman_collection.json). It covers every endpoint, grouped by module.
+Import [`postman/Collabspace.postman_collection.json`](postman/Collabspace.postman_collection.json) to explore the API. The default full run needs no Google or AI keys. Keep `aiMode=unconfigured` with a fresh `.env` and leave the Google ID token placeholder in place. The collection checks both AI endpoints return the documented `503`. The rest of the workflow exercises password sign-in and the regular API.
 
-1. Set `baseUrl` to `http://localhost:8000/api/v1` for the default local stack, or use the port configured in `.env`.
-2. Run **Auth → Login (saves token)** with a demo account (set the `email` and `password` collection variables, e.g. `mohamed@collabspace.test` / `Password123`).
-   The token is saved automatically and sent as a Bearer token on authenticated requests.
-   Or start fresh: **Register** creates a new user, **Register helper: second user** creates a teammate.
-3. Ids such as `projectId`, `taskId`, `fileId`, `meetingId` are saved by the "create" requests, so you can run the folders in order.
-4. Pick a local file in each multipart request. `Send message with attachment` saves the ID for `Download message attachment`.
-5. To try Google sign-in, use the same `GOOGLE_CLIENT_ID` in `.env` and on the browser client that obtains the ID token. Register the browser origin in Google Cloud, then paste a fresh ID token into the Postman request. With the basic Sign in with Google scopes (`openid`, `email`, `profile`), users can sign in without a Test Users invite. See [Google's audience settings](https://support.google.com/cloud/answer/15549945#publishing-status-testing).
-6. AI replies and meeting summaries use the optional `AI_*` settings.
-7. Use the **Cleanup** folder last on records created for the demo. It includes delete requests.
+To run the full collection from the repository root with Node.js installed:
+
+```bash
+npx --yes newman@6.2.3 run postman/Collabspace.postman_collection.json --working-dir .
+```
+
+On Windows PowerShell, use `npx.cmd` in place of `npx` if script execution is disabled.
+
+The default `baseUrl` is `http://localhost:8000/api/v1`. Use `--env-var "baseUrl=http://localhost:YOUR_PORT/api/v1"` if the port differs. The runner creates two demo accounts and saves the tokens and IDs for later requests. The final **Cleanup** folder deletes records created by this workflow. Run the full collection against a local demo database.
+
+For Postman Desktop, run the folders in order. If Postman asks for local files, select [`demo-avatar.png`](postman/fixtures/demo-avatar.png) for **Upload avatar** and [`demo-upload.txt`](postman/fixtures/demo-upload.txt) for both project files and chat attachments.
+
+### Optional provider demos
+
+- **Gemini:** Put the API key and an available chat model in `AI_API_KEY` and `AI_MODEL` in `.env`. Set `AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`. Set the Postman variable `aiMode` to `configured`, or pass `--env-var "aiMode=configured"` to Newman. **Ask the AI** then requires `201` with a reply. **Generate AI summary (organizer)** requires `200` with a summary after the transcript has been added. [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai)
+- **Google:** Use the same `GOOGLE_CLIENT_ID` in `.env` and in the browser client, and register its origin in Google Cloud. Set the local Postman variable `googleIdToken` to a fresh ID token and run **Login with Google**. The request expects `200` and returns its own Collabspace bearer token. With the basic Sign in with Google scopes (`openid`, `email`, `profile`), users can sign in without a Test Users invite. [Google's audience settings](https://support.google.com/cloud/answer/15549945#publishing-status-testing)
 
 ### Quick demo from the seeded data
 
-1. Sign in as Mohamed (`mohamed@collabspace.test`) with **Login (saves token)**, then run **Dashboard**. Open **List my projects**, find Alpha's ID and set `projectId`. Run **Project teams tab**. In **Reports overview**, enable the `project_id` query parameter to report on Alpha. You can set `period=today` to see activity since midnight UTC.
+1. Set `email=mohamed@collabspace.test` and `password=Password123` in the collection variables and run **Auth → Login (saves token)**, then **Dashboard**. Open **List my projects**, find Alpha's ID and set `projectId`. Run **Project teams tab** to see availability and task counts. In **Reports overview**, enable the `project_id` query parameter to report on Alpha. You can set `period=today` to see activity since midnight UTC.
 2. In **List project tasks**, use `status=in_review` and `search=Report charts`, and disable any `assigned_to_me` or priority filter. To demonstrate the team filter, set `teamId` to Backend's ID from **List teams (saves teamId)** and enable `team_id`. Save the task ID as `taskId`. On a fresh seed, sign in as Mohanad (`mohanad@collabspace.test`), the assignee. **Change status: completed** returns `403` while a reviewer is assigned. The reviewer, Khalid (`khalid@collabspace.test`), can run the same request and gets `200` with `progress: 100`.
 3. As Mohamed, find SepetGo's ID in **List my projects** with the search and status filters off. As Khalid, **Get project** with that ID returns `403` because he's outside SepetGo.
 4. With Alpha selected, sign in as Mohanad and run **Save my daily status**. **List daily statuses** shows his own update. Switch to Mohamed to review the team's updates for the day.
+5. With Alpha still selected, run **My inbox (saves conversationId)**, **Send text message (saves messageId)** and **Edit message (author)**. List the conversation's messages again to see the updated text and `edited_at`.
 
 The Quick demo uses password sign-in and works with the seeded database alone.
 
@@ -206,7 +217,7 @@ Enable `priority` and `overdue=1` in either task list to find open tasks whose U
 
 ## Endpoint overview
 
-All 66 API routes live under `/api/v1`. Only `auth/register`, `auth/login`, `auth/google`, `auth/forgot-password` and `auth/reset-password` are public.
+All 67 API routes live under `/api/v1`. Only `auth/register`, `auth/login`, `auth/google`, `auth/forgot-password` and `auth/reset-password` are public.
 
 | Area | Endpoints |
 |---|---|
@@ -217,7 +228,7 @@ All 66 API routes live under `/api/v1`. Only `auth/register`, `auth/login`, `aut
 | Tasks | `GET/POST /projects/{project}/tasks`, `GET /tasks`, `GET/PUT/DELETE /tasks/{task}`, `PATCH /tasks/{task}/status` |
 | Comments | `GET/POST /tasks/{task}/comments`, `PUT/DELETE /comments/{comment}` |
 | Files | `GET/POST /projects/{project}/files`, `GET /files`, `GET /files/{file}/download`, `DELETE /files/{file}` |
-| Chat | `GET /conversations?q=`, `POST /conversations/direct`, `GET/POST /conversations/{conversation}/messages`, `GET /messages/{message}/attachment` |
+| Chat | `GET /conversations?q=`, `POST /conversations/direct`, `GET/POST /conversations/{conversation}/messages`, `PATCH /messages/{message}`, `GET /messages/{message}/attachment` |
 | Meetings | `GET/POST /meetings`, `GET/PUT/DELETE /meetings/{meeting}`, `GET/POST /meetings/{meeting}/transcript`, `POST /meetings/{meeting}/summary/generate` |
 | Notifications | `GET /notifications`, `POST /notifications/{id}/read`, `POST /notifications/read-all` |
 | Insights | `GET /dashboard`, `GET /reports/overview`, `GET/POST /reports`, `GET /reports/{report}`, `GET /search?q=` |
@@ -225,8 +236,8 @@ All 66 API routes live under `/api/v1`. Only `auth/register`, `auth/login`, `aut
 
 ## Decisions and limits (v1)
 
-- **Chat** uses REST with cursor pagination, so the client polls for new messages. The API supports project, team and direct conversations.
-- **Meetings** store an HTTPS link for an external service such as Meet or Zoom. The calendar accepts a date range. Meeting summaries send transcript text to the configured AI provider.
+- **Chat** uses REST with cursor pagination, so the client polls for new messages. Project, team and direct conversations support author-only text edits. Read receipts are outside v1.
+- **Meetings** store an HTTPS link for an external service such as Meet or Zoom. The calendar accepts a date range. Meeting summaries send transcript text to the configured AI provider. Meeting attachments are outside v1.
 - **Reports** offer `today`, `week`, `month`, `three_months`, and `year`. Today compares the elapsed part of the UTC day with the same hours yesterday. The chart keeps its month label and project progress is cumulative.
 - **Profile email** is read-only. New Google accounts receive a random password and can set a password through the reset flow. Google linking requires a Gmail address or a Workspace `hd` claim. Linking an existing account with an unverified email replaces its password and revokes its old tokens. A verified account keeps its credentials.
 - **v1 scope** includes Kanban task data and daily project updates. See [SPEC §7](docs/SPEC.md#7-out-of-scope-for-v1-do-not-build) for the scope of chat, file history, and other design ideas.

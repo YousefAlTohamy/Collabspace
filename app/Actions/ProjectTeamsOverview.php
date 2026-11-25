@@ -82,6 +82,7 @@ class ProjectTeamsOverview
                 $counts = $perMember->get($member->user_id);
 
                 $data = ProjectMemberResource::make($member)->resolve();
+                $data['availability_status'] = $member->user->availability_status?->value;
                 $data['tasks_done'] = (int) ($counts->done ?? 0);
                 $data['tasks_total'] = (int) ($counts->total ?? 0);
 
