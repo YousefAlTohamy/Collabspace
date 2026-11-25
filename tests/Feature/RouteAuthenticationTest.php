@@ -9,7 +9,7 @@ use Tests\TestCase;
 
 class RouteAuthenticationTest extends TestCase
 {
-    public function test_api_routes_require_authentication_except_the_four_public_auth_routes(): void
+    public function test_api_routes_require_authentication_except_the_public_auth_routes(): void
     {
         $public = [
             'api/v1/auth/register',

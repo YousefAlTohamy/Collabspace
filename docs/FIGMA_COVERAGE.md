@@ -30,7 +30,7 @@ Members see and change what belongs to their projects; leaders manage the projec
 | "+9% from last month" on each card | `tasks.completed_this_month` / `completed_last_month` | ⚠️ only the completed counter has a monthly comparison; task statuses have no history |
 | Project overview chart (+ "All projects" / "This year") | `GET /dashboard` → `project_overview`; with filters `GET /reports/overview?project_id=&period=` | ✅ |
 | Active projects with progress | `GET /dashboard` → `active_projects` | ✅ |
-| Recent files + download | `GET /dashboard` → `recent_files`, `GET /files/{file}/download` | ✅ |
+| Recent files + download | `GET /dashboard` → `recent_files`, `GET /files/{file}/download` | ✅ uses the R7 allowlist. The `.jsx` file shown in the mockup is outside the allowed types. |
 | My tasks (due, priority, progress) | `GET /dashboard` → `my_tasks` | ✅ |
 | Teams widget (member tasks 12/14 and availability) | `GET /projects/{project}/teams` | ✅ current project members see each member's profile availability |
 | Upcoming meetings | `GET /dashboard` → `upcoming_meetings` | ✅ |
