@@ -8,6 +8,19 @@ meetings (with transcript and AI summary), reports and an AI assistant into one 
 Built with **Laravel 13**, **PHP 8.4**, **MySQL 8.4**, **Laravel Sanctum** and **Docker (Laravel Sail)**.
 The full business rules and the API contract are in [`docs/SPEC.md`](docs/SPEC.md).
 
+## Hosted demo for judges
+
+The Railway demo uses seeded sample data and is ready to try in Postman without Docker, Google sign-in, or an AI key.
+
+**API base URL** `https://collabspace-demo-production.up.railway.app/api/v1` · [Check service health](https://collabspace-demo-production.up.railway.app/up)
+
+1. Import the [hosted Postman collection](postman/Collabspace.Hosted-Demo.postman_collection.json) and open **Hosted AI demo**. The collection already has the hosted `baseUrl`.
+2. Run **Sign in as the demo project lead**. Postman saves the bearer token for the remaining requests.
+3. Run **Ask the AI**. A successful request returns `201` with a Gemini reply.
+4. Run **Find the seeded Sprint retrospective**, then **Generate AI summary (organizer)**. A successful request returns `200` with the summary generated from the seeded transcript.
+
+Use sample text with the shared demo account. If Gemini temporarily returns `503`, retry the AI request. If the Railway trial has ended, use the [local setup](#getting-started) and [seeded quick demo](#quick-demo-from-the-seeded-data). The [optional provider setup](#optional-provider-demos) enables Gemini locally.
+
 ## What the product does
 
 See `docs/FIGMA_COVERAGE.md` for the mapping between the Figma screens and the API, and `docs/ERD.md` for the data model.
