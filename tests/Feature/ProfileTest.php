@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\User;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
@@ -118,6 +119,23 @@ class ProfileTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors('avatar');
 
         $this->assertNull($user->fresh()->avatar_path);
+    }
+
+    public function test_avatar_upload_preserves_the_previous_avatar_when_storage_fails(): void
+    {
+        $existingPath = 'avatars/previous.png';
+        [$user, $token] = $this->actingAsUser(User::factory()->create(['avatar_path' => $existingPath]));
+
+        $disk = $this->mock(FilesystemAdapter::class);
+        $disk->shouldReceive('putFileAs')->once()->andReturnFalse();
+        $disk->shouldNotReceive('delete');
+        Storage::set('public', $disk);
+
+        $this->withToken($token)
+            ->postJson('/api/v1/me/avatar', ['avatar' => UploadedFile::fake()->image('new.png')])
+            ->assertInternalServerError();
+
+        $this->assertSame($existingPath, $user->fresh()->avatar_path);
     }
 
     public function test_password_change_requires_the_current_password(): void

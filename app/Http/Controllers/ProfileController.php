@@ -33,12 +33,10 @@ class ProfileController extends Controller
         $user = $request->user();
         $previousPath = $user->avatar_path;
 
-        // Store the new file and point the user at it first; only then remove the
-        // old one, so a failed store never leaves the user without an avatar.
-        // store() generates a random hash name; SVG is blocked by validation.
-        $user->update([
-            'avatar_path' => $request->file('avatar')->store('avatars', 'public'),
-        ]);
+        $path = $request->file('avatar')->store('avatars', 'public');
+        abort_if($path === false, 500);
+
+        $user->update(['avatar_path' => $path]);
 
         if ($previousPath !== null) {
             Storage::disk('public')->delete($previousPath);

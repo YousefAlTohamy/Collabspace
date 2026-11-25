@@ -14,17 +14,27 @@ The Railway demo uses seeded sample data and is ready to try in Postman without 
 
 **API base URL** `https://collabspace-demo-production.up.railway.app/api/v1` · [Check service health](https://collabspace-demo-production.up.railway.app/up)
 
-1. Import the [hosted Postman collection](postman/Collabspace.Hosted-Demo.postman_collection.json) and open **Hosted AI demo**. The collection already has the hosted `baseUrl`.
-2. Run **Sign in as the demo project lead**. Postman saves the bearer token for the remaining requests.
-3. Run **Ask the AI**. A successful request returns `201` with a Gemini reply.
-4. Run **Find the seeded Sprint retrospective**, then **Generate AI summary (organizer)**. A successful request returns `200` with the summary generated from the seeded transcript.
+1. In Postman Desktop, choose **Import** and paste the [direct collection URL](https://raw.githubusercontent.com/YousefAlTohamy/Collabspace/main/postman/Collabspace.Hosted-Demo.postman_collection.json). The collection already has the hosted `baseUrl`. Leave the environment selector on **No Environment**.
+2. Open **Hosted AI demo**, choose **Run**, and click **Start run** with its four requests selected.
 
-Use sample text with the shared demo account. If Gemini temporarily returns `503`, retry the AI request. If the Railway trial has ended, use the [local setup](#getting-started) and [seeded quick demo](#quick-demo-from-the-seeded-data). The [optional provider setup](#optional-provider-demos) enables Gemini locally.
+| Request | Expected result |
+|---|---|
+| Sign in as the demo project lead | `200`. Postman saves the bearer token for the remaining requests. |
+| Ask the AI | `201` with a Gemini reply. |
+| Find the seeded Sprint retrospective | `200`. Postman saves the meeting ID. |
+| Generate AI summary (organizer) | `200` with a new summary of the seeded transcript. |
+
+Use sample text with the shared demo account. If Postman reports a connection error, retry the run. If Gemini returns `503`, retry the AI request. If the Railway trial has ended, use the [local setup](#getting-started) and [seeded quick demo](#quick-demo-from-the-seeded-data). The [optional provider setup](#optional-provider-demos) enables Gemini locally.
+
+## Review guide
+
+| Criterion | Where to verify it |
+|---|---|
+| Business rules | Follow the [seeded quick demo](#quick-demo-from-the-seeded-data) to see a task assignee denied completion and the reviewer complete it. [SPEC](docs/SPEC.md) records the rules, and the [Figma coverage map](docs/FIGMA_COVERAGE.md) maps each design area to its endpoints and v1 limits. |
+| Security | The quick demo also checks cross-project access with two accounts. [RouteAuthenticationTest](tests/Feature/RouteAuthenticationTest.php) checks the public route allowlist, [ProjectFileContentTest](tests/Feature/ProjectFileContentTest.php) checks real upload content, and [GoogleSignInTest](tests/Feature/GoogleSignInTest.php) checks token verification and account linking. |
+| Code quality | [Architecture](#architecture) and the [ERD](docs/ERD.md) explain where the rules live and which invariants the database enforces. [GitHub Actions](https://github.com/YousefAlTohamy/Collabspace/actions/workflows/ci.yml) runs Pint and the feature suite against MySQL. |
 
 ## What the product does
-
-See `docs/FIGMA_COVERAGE.md` for the mapping between the Figma screens and the API, and `docs/ERD.md` for the data model.
-For a short review, start with the [seeded Quick demo](#quick-demo-from-the-seeded-data).
 
 | Module | What it covers |
 |---|---|
@@ -195,7 +205,7 @@ chat messages, upcoming meetings, a meeting with transcript and summary, notific
 
 ## API documentation (Postman)
 
-Import [`postman/Collabspace.postman_collection.json`](postman/Collabspace.postman_collection.json) to explore the API. The default full run needs no Google or AI keys. Keep `aiMode=unconfigured` with a fresh `.env` and leave the Google ID token placeholder in place. The collection checks both AI endpoints return the documented `503`. The rest of the workflow exercises password sign-in and the regular API.
+Import the [local Postman collection](postman/Collabspace.postman_collection.json) to run the full API workflow against your own seeded database. The default full run needs no Google or AI keys. Keep `aiMode=unconfigured` with a fresh `.env` and leave the Google ID token placeholder in place. The collection checks both AI endpoints return the documented `503`. The rest of the workflow exercises password sign-in and the regular API.
 
 To run the full collection from the repository root with Node.js installed:
 
