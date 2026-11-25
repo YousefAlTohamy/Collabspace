@@ -217,6 +217,7 @@
           "name": "Find the seeded Sprint retrospective",
           "request": {
             "method": "GET",
+            "description": "Search the meeting history from a fixed start date so the seeded retrospective remains visible as it ages.",
             "header": [
               {
                 "key": "Accept",
@@ -224,7 +225,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/meetings?from={{demoFrom}}&to={{demoTo}}",
+              "raw": "{{baseUrl}}/meetings?from=2000-01-01",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -234,27 +235,12 @@
               "query": [
                 {
                   "key": "from",
-                  "value": "{{demoFrom}}"
-                },
-                {
-                  "key": "to",
-                  "value": "{{demoTo}}"
+                  "value": "2000-01-01"
                 }
               ]
             }
           },
           "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const utcDate = days => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);",
-                  "pm.variables.set(\"demoFrom\", utcDate(-14));",
-                  "pm.variables.set(\"demoTo\", utcDate(1));"
-                ]
-              }
-            },
             {
               "listen": "test",
               "script": {
